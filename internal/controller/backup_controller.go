@@ -396,14 +396,43 @@ func (r *BackupReconciler) fail(ctx context.Context, b *keeperv1.Backup, reason,
 	return ctrl.Result{}, nil
 }
 
+// hooksInFlight reports phases in which pre hooks may already have quiesced
+// the application while post hooks have not yet succeeded. PreHooks counts
+// even though the freeze may not have run yet: the freeze can have run with
+// its status write lost (a deletion bumps resourceVersion, so the
+// optimistic-lock patch conflicts). Post hooks must tolerate running without
+// a matching pre hook (see DECISIONS.md).
+func hooksInFlight(p keeperv1.BackupPhase) bool {
+	switch p {
+	case keeperv1.BackupPreHooks, keeperv1.BackupSnapshotting, keeperv1.BackupPostHooks:
+		return true
+	}
+	return false
+}
+
 // finalize releases stored data and driver objects, then the finalizer.
 func (r *BackupReconciler) finalize(ctx context.Context, b *keeperv1.Backup) (ctrl.Result, error) {
 	if !controllerutil.ContainsFinalizer(b, keeperv1.FinalizerBackupCleanup) {
 		return ctrl.Result{}, nil
 	}
-	if b.Status.Phase == keeperv1.BackupSnapshotting {
-		// Deleted while the application may be quiesced: resume it first.
+	if hooksInFlight(b.Status.Phase) {
+		// Deleted while the application may be quiesced: resume it first,
+		// then persist a terminal phase so later finalize passes (blocked
+		// by a Restore or a storage outage) do not rerun the post hooks.
+		// A conflict on that write reruns them, which is the documented
+		// at-least-once contract.
+		orig := b.DeepCopy()
 		r.resume(ctx, b)
+		if _, err := r.fail(ctx, b, "DeletedInProgress", fmt.Sprintf("deleted during %s; post hooks were run to resume the application", orig.Status.Phase)); err != nil {
+			return ctrl.Result{}, err
+		}
+		conflict, err := r.patchStatus(ctx, b, orig, true)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if conflict {
+			return ctrl.Result{RequeueAfter: r.poll()}, nil
+		}
 	}
 	var restores keeperv1.RestoreList
 	if err := r.List(ctx, &restores, client.InNamespace(b.Namespace), client.MatchingFields{IndexRestoreBackup: b.Name}); err != nil {

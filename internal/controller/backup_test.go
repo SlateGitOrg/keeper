@@ -479,6 +479,113 @@ func TestDeletion(t *testing.T) {
 	})
 }
 
+// TestDeletionMidLifecycleResumesApplication deletes Backups while pre hooks
+// may have frozen the application and post hooks have not yet succeeded. The
+// deletion bumps resourceVersion, so the in-flight step's optimistic-lock
+// status write conflicts and is dropped; finalize must still thaw.
+func TestDeletionMidLifecycleResumesApplication(t *testing.T) {
+	requireEnv(t)
+	ctx := context.Background()
+	t.Cleanup(func() { execFake.Respond = nil })
+
+	// gate blocks the first exec in ns whose command contains flag until
+	// release is closed, then answers with err (nil for success).
+	type gate struct{ entered, release chan struct{} }
+	block := func(ns, flag string, err error) gate {
+		g := gate{entered: make(chan struct{}), release: make(chan struct{})}
+		var once bool
+		execFake.Respond = func(req hooks.ExecRequest) (hooks.ExecResult, error) {
+			if req.Namespace != ns || !slices.Contains(req.Command, flag) || once {
+				return hooks.ExecResult{}, nil
+			}
+			once = true
+			close(g.entered)
+			<-g.release
+			return hooks.ExecResult{}, err
+		}
+		return g
+	}
+	wait := func(t *testing.T, g gate) {
+		t.Helper()
+		select {
+		case <-g.entered:
+		case <-time.After(30 * time.Second):
+			t.Fatal("hook was never executed")
+		}
+	}
+	count := func(calls []string, s string) int {
+		n := 0
+		for _, c := range calls {
+			if c == s {
+				n++
+			}
+		}
+		return n
+	}
+
+	t.Run("deleted during pre hooks with the status write lost", func(t *testing.T) {
+		ns := newNamespace(t)
+		workload(t, ns, "data")
+		g := block(ns, "-f", nil)
+		spec := backupSpec(keeperv1.DriverFileCopy, "", "data")
+		spec.Hooks = pgHooks()
+		createBackup(t, ns, "frozen-pre", spec)
+		wait(t, g)
+		b := getBackup(t, ns, "frozen-pre")
+		if b.Status.Phase != keeperv1.BackupPreHooks {
+			t.Fatalf("phase %s, want PreHooks while the freeze runs", b.Status.Phase)
+		}
+		must(t, k8s.Delete(ctx, b))
+		close(g.release) // freeze succeeds; its status write now conflicts
+		waitGone(t, b)
+		got := callsIn(ns)
+		if !slices.Equal(got, []string{"pg-0: fsfreeze -f /data", "pg-0: fsfreeze -u /data"}) {
+			t.Fatalf("deleting a Backup in PreHooks must thaw exactly once; calls %v", got)
+		}
+		eventually(t, "DeletedInProgress event", func() bool { return hasEvent(t, ns, "frozen-pre", "DeletedInProgress") })
+	})
+
+	t.Run("deleted during post hooks after a failed thaw", func(t *testing.T) {
+		ns := newNamespace(t)
+		workload(t, ns, "data")
+		g := block(ns, "-u", errors.New("error dialing backend: connection reset by peer"))
+		spec := backupSpec(keeperv1.DriverFileCopy, "", "data")
+		spec.Hooks = pgHooks()
+		createBackup(t, ns, "frozen-post", spec)
+		wait(t, g)
+		b := getBackup(t, ns, "frozen-post")
+		if b.Status.Phase != keeperv1.BackupPostHooks {
+			t.Fatalf("phase %s, want PostHooks while the thaw runs", b.Status.Phase)
+		}
+		must(t, k8s.Delete(ctx, b))
+		close(g.release) // thaw fails; the Failed status write conflicts
+		waitGone(t, b)
+		got := callsIn(ns)
+		if n := count(got, "pg-0: fsfreeze -u /data"); n != 2 || got[len(got)-1] != "pg-0: fsfreeze -u /data" {
+			t.Fatalf("finalize must retry the thaw after deletion in PostHooks; calls %v", got)
+		}
+	})
+
+	t.Run("deleted during snapshotting", func(t *testing.T) {
+		ns := newNamespace(t)
+		workload(t, ns, "data")
+		execFake.Respond = nil
+		sim.Pause(true)
+		t.Cleanup(func() { sim.Pause(false) })
+		spec := backupSpec(keeperv1.DriverFileCopy, "", "data")
+		spec.Hooks = pgHooks()
+		createBackup(t, ns, "frozen-copy", spec)
+		waitBackup(t, ns, "frozen-copy", keeperv1.BackupSnapshotting)
+		b := getBackup(t, ns, "frozen-copy")
+		must(t, k8s.Delete(ctx, b))
+		waitGone(t, b)
+		sim.Pause(false)
+		if got := callsIn(ns); !slices.Equal(got, []string{"pg-0: fsfreeze -f /data", "pg-0: fsfreeze -u /data"}) {
+			t.Fatalf("deleting a Backup in Snapshotting must thaw exactly once; calls %v", got)
+		}
+	})
+}
+
 // TestRestoreFailureModes covers Restores that cannot proceed.
 func TestRestoreFailureModes(t *testing.T) {
 	requireEnv(t)

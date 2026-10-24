@@ -40,7 +40,11 @@ against, and what it doesn't.
 - **Hook blast radius.** An empty pod selector matches no pods. Hooks run only
   in the Backup's own namespace. Output kept in status is truncated to 512 bytes.
 - **Never stuck frozen.** Post hooks run after every failure path that follows
-  pre hooks, and when a Backup is deleted mid-snapshot.
+  pre hooks, and when a Backup is deleted in any phase from `PreHooks` through
+  `PostHooks`, including when the step's status write was lost to the
+  deletion's resourceVersion bump (`TestDeletionMidLifecycleResumesApplication`).
+  A thaw that fails is reported (`PostHookFailed` event) but cannot be retried
+  forever; an operator crash between freeze and thaw is recovered on restart.
 
 ## Known risks (not mitigated)
 

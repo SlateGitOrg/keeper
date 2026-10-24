@@ -76,7 +76,12 @@ moment, when the mover Job completes, so the application stays quiesced for the
 duration of the copy.
 
 **Deletion** goes through the `backup.keeper.dev/cleanup` finalizer. If the
-Backup is mid-snapshot, post hooks run first. Deletion waits while a
+Backup is deleted in `PreHooks`, `Snapshotting` or `PostHooks` (any phase in
+which pre hooks may have quiesced the application and post hooks have not yet
+succeeded), post hooks run first and the Backup is marked `Failed`
+(`DeletedInProgress`) so later finalize passes do not rerun them. `PreHooks` is
+included because a deletion bumps `resourceVersion`: the freeze can have run
+while its optimistic-lock status write was rejected. Deletion waits while a
 non-terminal Restore reads from the Backup. With `deletionPolicy: Delete` it
 then deletes driver objects (VolumeSnapshots) and every object under the
 Backup's storage prefix, and only after that removes the finalizer. If storage
@@ -200,6 +205,7 @@ existing entries are never overwritten. Fuzzers (`FuzzSafePath`,
 | manifest written, before Completed persisted | manifest rewritten with the same content | none |
 | policy created Backup, before lastScheduleTime persisted | same deterministic name → AlreadyExists | none |
 | finalizer cleanup half done | DeletePrefix lists what is left and continues | none |
+| deleted in PreHooks/Snapshotting/PostHooks, before `DeletedInProgress` persisted | post hooks run again | at-least-once |
 
 ## Security notes
 
