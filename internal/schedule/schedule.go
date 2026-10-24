@@ -48,6 +48,10 @@ func Parse(expr, tz string) (*Schedule, error) {
 	if err != nil {
 		return nil, fmt.Errorf("schedule %q: %w", expr, err)
 	}
+	// Backup names carry minute resolution, so slots must be a minute apart.
+	if every, ok := c.(cron.ConstantDelaySchedule); ok && every.Delay < time.Minute {
+		return nil, fmt.Errorf("schedule %q: @every intervals must be at least 1m", expr)
+	}
 	return &Schedule{expr: expr, loc: loc, cron: c}, nil
 }
 

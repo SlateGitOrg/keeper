@@ -346,7 +346,7 @@ func TestExecuteAndStoreFromEnv(t *testing.T) {
 	src, dst := t.TempDir(), t.TempDir()
 	writeFixture(t, src)
 	store := storage.NewMemory()
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := Runtime{Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	if err := Execute(ctx, store, Args{Mode: ModeBackup, Path: src, ArchiveKey: "a", ManifestKey: "m"}, log); err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +355,7 @@ func TestExecuteAndStoreFromEnv(t *testing.T) {
 	if err := Execute(ctx, store, Args{Mode: ModeRestore, Path: dst, ArchiveKey: "a", SHA256: m.SHA256}, log); err != nil {
 		t.Fatal(err)
 	}
-	if err := Execute(ctx, store, Args{Mode: "x"}, log); err == nil {
+	if err := Execute(ctx, store, Args{Mode: "x"}, Runtime{}); err == nil {
 		t.Fatal("unknown mode accepted")
 	}
 	if err := Execute(ctx, store, Args{Mode: ModeBackup, Path: filepath.Join(src, "nope"), ArchiveKey: "a", ManifestKey: "m"}, log); err == nil {

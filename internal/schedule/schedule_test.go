@@ -31,6 +31,7 @@ func TestParseErrors(t *testing.T) {
 		{"0 * * *", ""},
 		{"61 * * * *", ""},
 		{"@fortnightly", ""},
+		{"@every 30s", ""},
 		{"0 * * * *", "Mars/Olympus_Mons"},
 	} {
 		if _, err := Parse(tc.expr, tc.tz); err == nil {

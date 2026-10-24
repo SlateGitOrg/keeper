@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/archit2501/keeper/internal/storage"
 )
@@ -98,11 +99,23 @@ func StoreFromEnv(getenv func(string) string) (storage.ObjectStore, error) {
 	})
 }
 
+// Runtime carries the ambient dependencies of a mover run.
+type Runtime struct {
+	// Now is the clock recorded in manifests (time.Now if nil).
+	Now func() time.Time
+	// Log receives progress (discarded if nil).
+	Log *slog.Logger
+}
+
 // Execute runs one mover invocation against store.
-func Execute(ctx context.Context, store storage.ObjectStore, a Args, log *slog.Logger) error {
+func Execute(ctx context.Context, store storage.ObjectStore, a Args, rt Runtime) error {
+	log := rt.Log
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
 	switch a.Mode {
 	case ModeBackup:
-		m, err := Backup(ctx, store, BackupOptions{Source: a.Path, PVCName: a.PVCName, ArchiveKey: a.ArchiveKey, ManifestKey: a.ManifestKey})
+		m, err := Backup(ctx, store, BackupOptions{Source: a.Path, PVCName: a.PVCName, ArchiveKey: a.ArchiveKey, ManifestKey: a.ManifestKey, Now: rt.Now})
 		if err != nil {
 			return err
 		}
