@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/archit2501/keeper/internal/storage"
 )
 
@@ -79,13 +81,22 @@ func checkParents(root, rel string) error {
 	return nil
 }
 
-// Restore downloads an archive and extracts it into opts.Dest. Entries are
-// first extracted into a staging directory inside Dest; only after the whole
-// stream was read and its SHA-256 verified are they moved into place, so a
-// corrupt archive leaves Dest untouched. Existing entries in Dest are never
-// overwritten.
+// Restore downloads an archive and extracts it into opts.Dest.
+//
+// With ExpectedSHA256 set, the object is first streamed through SHA-256
+// without touching the filesystem, so a tampered or corrupt archive is
+// rejected before a single entry is extracted. The second read extracts into
+// a staging directory inside Dest and is hashed again, which catches an
+// object replaced between the two reads. Only then are entries moved into
+// place, so a bad archive leaves Dest untouched. Existing entries in Dest are
+// never overwritten.
 func Restore(ctx context.Context, store storage.ObjectStore, opts RestoreOptions) (RestoreStats, error) {
 	var st RestoreStats
+	if opts.ExpectedSHA256 != "" {
+		if err := verifyObject(ctx, store, opts.ArchiveKey, opts.ExpectedSHA256); err != nil {
+			return st, err
+		}
+	}
 	rc, err := store.Get(ctx, opts.ArchiveKey)
 	if err != nil {
 		return st, fmt.Errorf("mover: open %s: %w", opts.ArchiveKey, err)
@@ -107,8 +118,8 @@ func Restore(ctx context.Context, store storage.ObjectStore, opts RestoreOptions
 	if _, err := io.Copy(hasher, rc); err != nil {
 		return st, fmt.Errorf("mover: read %s: %w", opts.ArchiveKey, err)
 	}
-	if sum := hex.EncodeToString(hasher.Sum(nil)); opts.ExpectedSHA256 != "" && sum != opts.ExpectedSHA256 {
-		return st, fmt.Errorf("%w: got %s, want %s", ErrChecksum, sum, opts.ExpectedSHA256)
+	if err := checkSum(hasher.Sum(nil), opts.ExpectedSHA256); err != nil {
+		return st, err
 	}
 
 	entries, err := os.ReadDir(staging)
@@ -125,6 +136,27 @@ func Restore(ctx context.Context, store storage.ObjectStore, opts RestoreOptions
 		}
 	}
 	return st, nil
+}
+
+// verifyObject streams key through SHA-256 and compares it with want.
+func verifyObject(ctx context.Context, store storage.ObjectStore, key, want string) error {
+	rc, err := store.Get(ctx, key)
+	if err != nil {
+		return fmt.Errorf("mover: open %s: %w", key, err)
+	}
+	defer func() { _ = rc.Close() }()
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, rc); err != nil {
+		return fmt.Errorf("mover: read %s: %w", key, err)
+	}
+	return checkSum(hasher.Sum(nil), want)
+}
+
+func checkSum(sum []byte, want string) error {
+	if got := hex.EncodeToString(sum); want != "" && got != want {
+		return fmt.Errorf("%w: got %s, want %s", ErrChecksum, got, want)
+	}
+	return nil
 }
 
 type dirTime struct {
@@ -164,10 +196,7 @@ func extract(ctx context.Context, r io.Reader, root string) (RestoreStats, error
 		perm := os.FileMode(hdr.Mode) & os.ModePerm //nolint:gosec // masked to permission bits.
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0o700); err != nil {
-				return st, err
-			}
-			if err := os.Chmod(target, perm|0o700); err != nil {
+			if err := makeDir(target, rel, perm|0o700); err != nil {
 				return st, err
 			}
 			dirs = append(dirs, dirTime{target, hdr.ModTime})
@@ -178,7 +207,7 @@ func extract(ctx context.Context, r io.Reader, root string) (RestoreStats, error
 			if err := writeFile(target, tr, perm, hdr.Size); err != nil {
 				return st, err
 			}
-			_ = os.Chtimes(target, hdr.ModTime, hdr.ModTime)
+			_ = setTimes(target, hdr.ModTime)
 			st.DataBytes += hdr.Size
 		case tar.TypeSymlink:
 			if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
@@ -198,9 +227,41 @@ func extract(ctx context.Context, r io.Reader, root string) (RestoreStats, error
 	}
 	// Directory mtimes last, deepest first, because writing children bumps them.
 	for i := len(dirs) - 1; i >= 0; i-- {
-		_ = os.Chtimes(dirs[i].path, dirs[i].mod, dirs[i].mod)
+		_ = setTimes(dirs[i].path, dirs[i].mod)
 	}
 	return st, nil
+}
+
+// makeDir creates target as a directory, or accepts an existing real
+// directory, and sets its mode. It never follows a symlink: an archive could
+// otherwise plant "d -> /somewhere" and then send a directory entry "d" to
+// chmod the link's target. The mode is set through a descriptor opened with
+// O_NOFOLLOW|O_DIRECTORY, so only the directory itself is changed.
+func makeDir(target, rel string, perm os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		return err
+	}
+	if err := os.Mkdir(target, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	fd, err := unix.Open(target, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.ENOTDIR) {
+		return fmt.Errorf("%w: %q exists and is not a directory", ErrUnsafePath, rel)
+	}
+	if err != nil {
+		return &os.PathError{Op: "open", Path: target, Err: err}
+	}
+	defer func() { _ = unix.Close(fd) }()
+	if err := unix.Fchmod(fd, uint32(perm)); err != nil {
+		return &os.PathError{Op: "chmod", Path: target, Err: err}
+	}
+	return nil
+}
+
+// setTimes sets atime and mtime of p itself, never of a symlink's target.
+func setTimes(p string, t time.Time) error {
+	ts := unix.NsecToTimespec(t.UnixNano())
+	return unix.UtimesNanoAt(unix.AT_FDCWD, p, []unix.Timespec{ts, ts}, unix.AT_SYMLINK_NOFOLLOW)
 }
 
 func writeFile(target string, r io.Reader, perm os.FileMode, size int64) error {

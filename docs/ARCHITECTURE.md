@@ -171,14 +171,23 @@ regardless of volume size. Files that shrink while being read fail the backup
 header. Sockets, devices and FIFOs are skipped and counted, and `lost+found` at
 the root is skipped.
 
-Restore streams `Get → tee(sha256) → gunzip → untar` into a staging directory
-inside the target. Each entry path must pass `SafePath` (not absolute, no `..`,
-no backslash, no NUL), and no parent component may be a symlink or a file
-(`checkParents`). Files are created with `O_EXCL|O_NOFOLLOW`, permissions are
-masked to 0777, and hard links and device entries are skipped. Once the stream
-has been read to EOF and the hash matches, entries are renamed into place, and
-existing entries are never overwritten. Fuzzers (`FuzzSafePath`,
-`FuzzRestore`) check that nothing is ever written outside the target.
+Restore first streams the object through SHA-256 alone (`verifyObject`, no
+filesystem access), so a tampered or corrupt archive is rejected before any
+entry is extracted. It then streams `Get → tee(sha256) → gunzip → untar` into a
+staging directory inside the target and checks the hash again, which catches
+an object replaced between the two reads. The price is reading the archive
+twice. Each entry path must pass `SafePath` (not absolute, no `..`, no
+backslash, no NUL), and no parent component may be a symlink or a file
+(`checkParents`). Files are created with `O_EXCL|O_NOFOLLOW`. Directory entries
+are created with `Mkdir` and their mode is set through a descriptor opened
+with `O_DIRECTORY|O_NOFOLLOW` (`makeDir`), so a directory entry whose name was
+planted as a symlink is rejected instead of chmod-ing the link target;
+timestamps are set with `AT_SYMLINK_NOFOLLOW`. Permissions are masked to 0777,
+and hard links and device entries are skipped. Once the second pass has been
+read to EOF and the hash matches, entries are renamed into place, and existing
+entries are never overwritten. Fuzzers (`FuzzSafePath`, `FuzzRestore`) check
+that nothing is ever written outside the target and that a sibling directory
+reachable through a planted symlink keeps its mode and mtime.
 
 ## Consistency, caching and crash safety
 

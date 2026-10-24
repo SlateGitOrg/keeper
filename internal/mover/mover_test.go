@@ -277,6 +277,159 @@ func TestRestoreRejectsHostileArchives(t *testing.T) {
 	}
 }
 
+// outsideDir creates parent/outside with a fixed mode and mtime and returns a
+// check that it is still exactly that: an extractor that follows a planted
+// symlink would chmod or chtimes it.
+func outsideDir(t *testing.T, parent string) func(t *testing.T) {
+	t.Helper()
+	dir := filepath.Join(parent, "outside")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil { // defeat umask
+		t.Fatal(err)
+	}
+	mod := time.Date(2001, 2, 3, 4, 5, 6, 0, time.UTC)
+	if err := os.Chtimes(dir, mod, mod); err != nil {
+		t.Fatal(err)
+	}
+	return func(t *testing.T) {
+		t.Helper()
+		fi, err := os.Lstat(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode() != fs.ModeDir|0o700 || !fi.ModTime().Equal(mod) {
+			t.Fatalf("directory outside dest modified: mode %v mtime %v", fi.Mode(), fi.ModTime())
+		}
+		if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+			t.Fatalf("entries created outside dest: %v", entries)
+		}
+	}
+}
+
+// TestRestoreRefusesDirEntryOverSymlink: a directory entry whose name was
+// planted as a symlink must not chmod/chtimes the link target, whether or
+// not the archive's checksum is valid.
+func TestRestoreRefusesDirEntryOverSymlink(t *testing.T) {
+	for _, link := range []string{"../../outside", "ABS"} {
+		t.Run(link, func(t *testing.T) {
+			parent := t.TempDir()
+			untouched := outsideDir(t, parent)
+			dst := filepath.Join(parent, "dst")
+			if err := os.Mkdir(dst, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if link == "ABS" {
+				link = filepath.Join(parent, "outside")
+			}
+			data := archiveOf(t,
+				entry{name: "d", typ: tar.TypeSymlink, link: link},
+				entry{name: "d", typ: tar.TypeDir, mode: 0o777},
+			)
+			if err := restoreBytes(t, data, dst); !errors.Is(err, ErrUnsafePath) {
+				t.Fatalf("err = %v, want ErrUnsafePath", err)
+			}
+			untouched(t)
+			if entries, _ := os.ReadDir(dst); len(entries) != 0 {
+				t.Fatalf("dest not empty: %v", entries)
+			}
+		})
+	}
+}
+
+func TestRestoreDirEntryOverFileAndRepeatedDir(t *testing.T) {
+	dst := t.TempDir()
+	err := restoreBytes(t, archiveOf(t,
+		entry{name: "f", typ: tar.TypeReg, body: "x"},
+		entry{name: "f", typ: tar.TypeDir},
+	), dst)
+	if !errors.Is(err, ErrUnsafePath) {
+		t.Fatalf("dir over file: err = %v, want ErrUnsafePath", err)
+	}
+	// A directory listed twice (or implied by a child first) is fine; the
+	// last entry's mode wins.
+	dst = t.TempDir()
+	if err := restoreBytes(t, archiveOf(t,
+		entry{name: "d/x", typ: tar.TypeReg, body: "x"},
+		entry{name: "d", typ: tar.TypeDir, mode: 0o700},
+		entry{name: "d", typ: tar.TypeDir, mode: 0o750},
+	), dst); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(filepath.Join(dst, "d")); err != nil || fi.Mode() != fs.ModeDir|0o750 {
+		t.Fatalf("d: %v %v", fi, err)
+	}
+}
+
+// countingStore wraps a store, counts Gets, and can serve different bytes
+// on the second read of a key (an object replaced between reads).
+type countingStore struct {
+	storage.ObjectStore
+	gets   int
+	second []byte
+}
+
+func (c *countingStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	c.gets++
+	if c.gets == 2 && c.second != nil {
+		return io.NopCloser(bytes.NewReader(c.second)), nil
+	}
+	return c.ObjectStore.Get(ctx, key)
+}
+
+// TestRestoreVerifiesBeforeExtracting: with a recorded hash, a tampered
+// archive is rejected by a hash-only pass; the extractor never sees it.
+func TestRestoreVerifiesBeforeExtracting(t *testing.T) {
+	ctx := context.Background()
+	parent := t.TempDir()
+	untouched := outsideDir(t, parent)
+	dst := filepath.Join(parent, "dst")
+	if err := os.Mkdir(dst, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tampered := archiveOf(t,
+		entry{name: "d", typ: tar.TypeSymlink, link: "../../outside"},
+		entry{name: "d", typ: tar.TypeDir, mode: 0o777},
+	)
+	mem := storage.NewMemory()
+	if _, err := mem.Put(ctx, "x", bytes.NewReader(tampered), int64(len(tampered))); err != nil {
+		t.Fatal(err)
+	}
+	cs := &countingStore{ObjectStore: mem}
+	_, err := Restore(ctx, cs, RestoreOptions{ArchiveKey: "x", ExpectedSHA256: strings.Repeat("0", 64), Dest: dst})
+	if !errors.Is(err, ErrChecksum) {
+		t.Fatalf("err = %v, want ErrChecksum", err)
+	}
+	if cs.gets != 1 {
+		t.Fatalf("object read %d times; extraction must not start after a failed hash pass", cs.gets)
+	}
+	untouched(t)
+	if entries, _ := os.ReadDir(dst); len(entries) != 0 {
+		t.Fatalf("dest not empty: %v", entries)
+	}
+}
+
+func TestRestoreDetectsObjectReplacedBetweenReads(t *testing.T) {
+	ctx := context.Background()
+	good := archiveOf(t, entry{name: "a", typ: tar.TypeReg, body: "good"})
+	evil := archiveOf(t, entry{name: "a", typ: tar.TypeReg, body: "evil"})
+	mem := storage.NewMemory()
+	if _, err := mem.Put(ctx, "x", bytes.NewReader(good), int64(len(good))); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(good)
+	dst := t.TempDir()
+	cs := &countingStore{ObjectStore: mem, second: evil}
+	_, err := Restore(ctx, cs, RestoreOptions{ArchiveKey: "x", ExpectedSHA256: hex.EncodeToString(sum[:]), Dest: dst})
+	if !errors.Is(err, ErrChecksum) || cs.gets != 2 {
+		t.Fatalf("err = %v after %d reads, want ErrChecksum after 2", err, cs.gets)
+	}
+	if entries, _ := os.ReadDir(dst); len(entries) != 0 {
+		t.Fatalf("dest not empty: %v", entries)
+	}
+}
+
 func TestRestoreStripsSpecialBitsAndSkipsHardlinks(t *testing.T) {
 	dst := t.TempDir()
 	data := archiveOf(t,
@@ -392,24 +545,31 @@ func FuzzSafePath(f *testing.F) {
 }
 
 // FuzzRestore feeds arbitrary entry names and types to the extractor and
-// checks nothing is ever created outside the destination.
+// checks nothing is ever created outside the destination and that a sibling
+// directory reachable through a planted symlink keeps its mode and mtime.
 func FuzzRestore(f *testing.F) {
-	f.Add("a/b", "c", byte(tar.TypeReg), "")
-	f.Add("../x", "y", byte(tar.TypeReg), "")
-	f.Add("l", "l/x", byte(tar.TypeSymlink), "../..")
-	f.Add("d/", "d/../../e", byte(tar.TypeDir), "")
-	f.Fuzz(func(t *testing.T, n1, n2 string, typ byte, link string) {
+	f.Add("a/b", "c", byte(tar.TypeReg), "", byte(tar.TypeReg))
+	f.Add("../x", "y", byte(tar.TypeReg), "", byte(tar.TypeReg))
+	f.Add("l", "l/x", byte(tar.TypeSymlink), "../..", byte(tar.TypeReg))
+	f.Add("d/", "d/../../e", byte(tar.TypeDir), "", byte(tar.TypeReg))
+	f.Add("d", "d", byte(tar.TypeSymlink), "../../outside", byte(tar.TypeDir))
+	f.Add("d", "d/", byte(tar.TypeSymlink), "../outside", byte(tar.TypeDir))
+	f.Fuzz(func(t *testing.T, n1, n2 string, typ byte, link string, typ2 byte) {
 		if typ != tar.TypeReg && typ != tar.TypeDir && typ != tar.TypeSymlink {
 			typ = tar.TypeReg
 		}
+		if typ2 != tar.TypeReg && typ2 != tar.TypeDir {
+			typ2 = tar.TypeReg
+		}
 		parent := t.TempDir()
+		untouched := outsideDir(t, parent)
 		dst := filepath.Join(parent, "dst")
 		if err := os.Mkdir(dst, 0o700); err != nil {
 			t.Fatal(err)
 		}
 		data, err := tryArchive(
 			entry{name: n1, typ: typ, link: link, body: bodyFor(typ)},
-			entry{name: n2, typ: tar.TypeReg, body: "payload"},
+			entry{name: n2, typ: typ2, body: bodyFor(typ2), mode: 0o777},
 		)
 		if err != nil {
 			t.Skip("header not encodable by archive/tar")
@@ -421,9 +581,10 @@ func FuzzRestore(f *testing.F) {
 			names = append(names, e.Name())
 		}
 		sort.Strings(names)
-		if !reflect.DeepEqual(names, []string{"dst"}) {
+		if !reflect.DeepEqual(names, []string{"dst", "outside"}) {
 			t.Fatalf("entries outside dest: %v", names)
 		}
+		untouched(t)
 	})
 }
 

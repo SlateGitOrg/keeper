@@ -22,11 +22,18 @@ against, and what it doesn't.
 ## Mitigations in place
 
 - **Archive integrity.** The SHA-256 of each archive is recorded in Backup
-  status and the backup manifest. Restore checks the hash before anything
-  becomes visible in the target, and a mismatch leaves the target empty
-  (tested).
+  status and the backup manifest. Restore hashes the whole object in a
+  read-only pass before extracting anything, hashes it again while
+  extracting into a staging directory, and moves entries into place only
+  when both match. A mismatch leaves the target empty and, on the first
+  pass, means the extractor never ran (tested).
 - **Hostile archives.** Absolute paths, `..`, backslashes, NUL bytes, writes
-  through planted symlinks or under a file "parent" are rejected. setuid,
+  through planted symlinks or under a file "parent" are rejected. A
+  directory entry whose name already exists as a symlink or file is
+  rejected; directory modes are set via an `O_NOFOLLOW` descriptor and
+  timestamps with `AT_SYMLINK_NOFOLLOW`, so no chmod or chtimes reaches a
+  link target (fix round 1: before this, a symlink-then-dir pair could chmod
+  a directory outside the restore root). setuid,
   setgid and sticky bits are stripped. Hard links and device nodes are
   skipped. Files are opened with `O_EXCL|O_NOFOLLOW`. Two fuzzers back this up.
 - **No overwrite.** Restores create new claims only, and a pre-existing claim
