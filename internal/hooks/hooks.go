@@ -138,6 +138,9 @@ func (r *Runner) runHook(ctx context.Context, namespace string, stage Stage, h k
 			res.Message = truncate(firstNonEmpty(res.Message, execErr.Error()))
 			if firstErr == nil {
 				firstErr = fmt.Errorf("pod %s: %w", pod.Name, execErr)
+				if res.Message != execErr.Error() {
+					firstErr = fmt.Errorf("%w: %s", firstErr, res.Message)
+				}
 			}
 		}
 		res.Time = r.now()

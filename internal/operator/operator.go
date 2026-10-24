@@ -76,7 +76,7 @@ func Setup(ctx context.Context, mgr ctrl.Manager, o Options) error {
 		csi = *o.CSI
 	}
 	base := controller.Base{
-		Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Clock: clk, PollInterval: o.PollInterval,
+		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), Scheme: mgr.GetScheme(), Clock: clk, PollInterval: o.PollInterval,
 		Recorder: mgr.GetEventRecorder(EventSource),
 	}
 	deps := snapshot.Deps{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Now: clk.Now}

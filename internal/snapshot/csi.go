@@ -82,12 +82,12 @@ func (d *CSI) Observe(ctx context.Context, b *keeperv1.Backup, _ storage.ObjectS
 		name := SnapshotName(b.Name, v.PVCName)
 		v.SnapshotName = name
 		var vs snapv1.VolumeSnapshot
-		if err := d.Client.Get(ctx, types.NamespacedName{Namespace: b.Namespace, Name: name}, &vs); err != nil {
-			if apierrors.IsNotFound(err) {
-				return Progress{Failed: true, Message: fmt.Sprintf("VolumeSnapshot %s disappeared", name)}, nil
-			}
+		err := d.Client.Get(ctx, types.NamespacedName{Namespace: b.Namespace, Name: name}, &vs)
+		if err != nil && !apierrors.IsNotFound(err) {
 			return Progress{}, err
 		}
+		// NotFound: the cache has not seen Start's create yet (Start
+		// re-creates a snapshot that is really gone); treat as not cut.
 		st := vs.Status
 		if st != nil && st.Error != nil && st.Error.Message != nil {
 			return Progress{Failed: true, Message: fmt.Sprintf("VolumeSnapshot %s: %s", name, *st.Error.Message)}, nil

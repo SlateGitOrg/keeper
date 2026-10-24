@@ -602,6 +602,9 @@ spec:
                         - message: prefix must be relative and must not contain '..'
                           rule: '!has(self.prefix) || (!self.prefix.startsWith(''/'')
                             && !self.prefix.contains(''..''))'
+                        - message: credentialsSecretRef.name is required
+                          rule: has(self.credentialsSecretRef.name) && size(self.credentialsSecretRef.name)
+                            > 0
                     required:
                     - driver
                     - source

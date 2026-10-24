@@ -30,6 +30,7 @@ type RestoreReconciler struct {
 
 // +kubebuilder:rbac:groups=backup.keeper.dev,resources=restores,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=backup.keeper.dev,resources=restores/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=backup.keeper.dev,resources=restores/finalizers,verbs=update
 
 // Reconcile implements reconcile.Reconciler.
 func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -43,10 +44,12 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	orig := rs.DeepCopy()
 	res, stepErr := r.step(ctx, &rs)
 	rs.Status.ObservedGeneration = rs.Generation
-	if !equality.Semantic.DeepEqual(orig.Status, rs.Status) {
-		if err := r.Status().Patch(ctx, &rs, client.MergeFrom(orig)); err != nil {
-			return ctrl.Result{}, errors.Join(stepErr, err)
-		}
+	conflict, err := r.patchStatus(ctx, &rs, orig, !equality.Semantic.DeepEqual(orig.Status, rs.Status))
+	if err != nil {
+		return ctrl.Result{}, errors.Join(stepErr, err)
+	}
+	if conflict {
+		return ctrl.Result{RequeueAfter: r.poll()}, nil
 	}
 	return res, stepErr
 }
@@ -64,7 +67,9 @@ func (r *RestoreReconciler) step(ctx context.Context, rs *keeperv1.Restore) (ctr
 		return ctrl.Result{}, err
 	}
 	switch {
-	case !b.DeletionTimestamp.IsZero():
+	case !b.DeletionTimestamp.IsZero() && rs.Status.Phase == keeperv1.RestorePending:
+		// A Restore already reading the backup finishes first: the Backup
+		// finalizer waits for it. A new one must not start.
 		return r.fail(rs, "BackupDeleting", fmt.Sprintf("backup %s is being deleted", b.Name))
 	case b.Status.Phase == keeperv1.BackupFailed:
 		return r.fail(rs, "BackupFailed", fmt.Sprintf("backup %s failed: %s", b.Name, b.Status.Message))

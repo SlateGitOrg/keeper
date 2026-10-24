@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -33,6 +34,8 @@ import (
 	"github.com/archit2501/keeper/internal/snapshot"
 	"github.com/archit2501/keeper/internal/storage"
 )
+
+var errNotReady = errors.New("simcluster: pod cannot start yet")
 
 // NodeName is the single simulated node.
 const NodeName = "sim-node-1"
@@ -55,14 +58,20 @@ type Cluster struct {
 	mu      sync.Mutex
 	volumes map[string]string
 	paused  bool
+	provMu  sync.Mutex
+	stepMu  sync.Mutex
 }
 
 // Pause stops (true) or resumes (false) all simulated controllers, leaving
 // Jobs and snapshots in flight.
+// Pausing waits for an in-flight Step to finish, so nothing progresses
+// after Pause(true) returns.
 func (c *Cluster) Pause(p bool) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.paused = p
+	c.mu.Unlock()
+	c.stepMu.Lock()
+	defer c.stepMu.Unlock()
 }
 
 func (c *Cluster) isPaused() bool {
@@ -109,7 +118,12 @@ func (c *Cluster) CreateClaim(ctx context.Context, ns, name, size string, lbls m
 }
 
 func (c *Cluster) provision(ctx context.Context, pvc *corev1.PersistentVolumeClaim, from string) (string, error) {
+	c.provMu.Lock()
+	defer c.provMu.Unlock()
 	dir := filepath.Join(c.Root, "volumes", pvc.Namespace, pvc.Name)
+	if c.VolumeDir(pvc.Namespace, pvc.Name) == dir {
+		return dir, nil // already provisioned by a concurrent caller
+	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", err
 	}
@@ -119,10 +133,20 @@ func (c *Cluster) provision(ctx context.Context, pvc *corev1.PersistentVolumeCla
 		}
 	}
 	c.bindDir(pvc.Namespace, pvc.Name, dir)
-	pvc.Status.Phase = corev1.ClaimBound
-	pvc.Status.AccessModes = pvc.Spec.AccessModes
-	pvc.Status.Capacity = pvc.Spec.Resources.Requests
-	if err := c.Client.Status().Update(ctx, pvc); err != nil {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cur corev1.PersistentVolumeClaim
+		if err := c.Client.Get(ctx, client.ObjectKeyFromObject(pvc), &cur); err != nil {
+			return err
+		}
+		if cur.Status.Phase == corev1.ClaimBound {
+			return nil
+		}
+		cur.Status.Phase = corev1.ClaimBound
+		cur.Status.AccessModes = cur.Spec.AccessModes
+		cur.Status.Capacity = cur.Spec.Resources.Requests
+		return c.Client.Status().Update(ctx, &cur)
+	})
+	if err != nil {
 		return "", fmt.Errorf("bind %s: %w", pvc.Name, err)
 	}
 	return dir, nil
@@ -167,6 +191,8 @@ func (c *Cluster) Run(ctx context.Context, interval time.Duration) {
 
 // Step advances every simulated controller once.
 func (c *Cluster) Step(ctx context.Context) error {
+	c.stepMu.Lock()
+	defer c.stepMu.Unlock()
 	if c.isPaused() {
 		return nil
 	}
@@ -273,6 +299,9 @@ func (c *Cluster) stepJobs(ctx context.Context) error {
 			continue
 		}
 		runErr := c.runJob(ctx, job)
+		if errors.Is(runErr, errNotReady) {
+			continue // like a pod waiting for its volume
+		}
 		if runErr != nil {
 			c.Log.Info("mover job failed", "job", job.Name, "err", runErr)
 		}
@@ -299,7 +328,7 @@ func (c *Cluster) runJob(ctx context.Context, job *batchv1.Job) error {
 	claim := spec.Volumes[0].PersistentVolumeClaim.ClaimName
 	dir := c.VolumeDir(job.Namespace, claim)
 	if dir == "" {
-		return fmt.Errorf("claim %s is not bound", claim)
+		return fmt.Errorf("%w: claim %s is not bound", errNotReady, claim)
 	}
 	env := map[string]string{}
 	for _, e := range ctr.Env {

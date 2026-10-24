@@ -66,6 +66,7 @@ rules:
   - backup.keeper.dev
   resources:
   - backups/finalizers
+  - restores/finalizers
   verbs:
   - update
 - apiGroups:

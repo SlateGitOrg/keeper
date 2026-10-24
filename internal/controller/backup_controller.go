@@ -88,14 +88,26 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if b.Status.Phase.Terminal() {
 		return ctrl.Result{}, nil
 	}
+	if b.Status.Phase == keeperv1.BackupPreHooks || b.Status.Phase == keeperv1.BackupPostHooks {
+		// Hooks have side effects in the workload; never run them from a
+		// cached copy that may predate our own last status write.
+		if err := r.APIReader.Get(ctx, req.NamespacedName, &b); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		if b.Status.Phase != keeperv1.BackupPreHooks && b.Status.Phase != keeperv1.BackupPostHooks {
+			return ctrl.Result{RequeueAfter: r.poll()}, nil
+		}
+	}
 
 	orig := b.DeepCopy()
 	res, stepErr := r.step(ctx, &b)
 	b.Status.ObservedGeneration = b.Generation
-	if !equality.Semantic.DeepEqual(orig.Status, b.Status) {
-		if err := r.Status().Patch(ctx, &b, client.MergeFrom(orig)); err != nil {
-			return ctrl.Result{}, errors.Join(stepErr, err)
-		}
+	conflict, err := r.patchStatus(ctx, &b, orig, !equality.Semantic.DeepEqual(orig.Status, b.Status))
+	if err != nil {
+		return ctrl.Result{}, errors.Join(stepErr, err)
+	}
+	if conflict {
+		return ctrl.Result{RequeueAfter: r.poll()}, nil
 	}
 	return res, stepErr
 }
@@ -283,6 +295,10 @@ func (r *BackupReconciler) snapshot(ctx context.Context, b *keeperv1.Backup) (ct
 		return ctrl.Result{}, err
 	}
 	if err := d.Start(ctx, b); err != nil {
+		if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) {
+			r.resume(ctx, b)
+			return r.fail(ctx, b, "DriverError", err.Error())
+		}
 		return ctrl.Result{}, err
 	}
 	p, err := d.Observe(ctx, b, store)

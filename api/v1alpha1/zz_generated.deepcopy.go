@@ -137,6 +137,11 @@ func (in *BackupPolicySpec) DeepCopyInto(out *BackupPolicySpec) {
 		**out = **in
 	}
 	out.Retention = in.Retention
+	if in.FailedBackupsHistoryLimit != nil {
+		in, out := &in.FailedBackupsHistoryLimit, &out.FailedBackupsHistoryLimit
+		*out = new(int32)
+		**out = **in
+	}
 	in.Template.DeepCopyInto(&out.Template)
 }
 

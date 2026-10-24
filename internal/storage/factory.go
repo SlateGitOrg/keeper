@@ -29,16 +29,24 @@ type SecretFactory struct {
 	Client client.Reader
 }
 
-// Open implements Factory.
-func (f SecretFactory) Open(ctx context.Context, namespace string, spec keeperv1.StorageSpec) (ObjectStore, error) {
+func readCredentials(ctx context.Context, c client.Reader, namespace string, spec keeperv1.StorageSpec) (id, secret string, err error) {
 	var sec corev1.Secret
 	key := types.NamespacedName{Namespace: namespace, Name: spec.CredentialsSecretRef.Name}
-	if err := f.Client.Get(ctx, key, &sec); err != nil {
-		return nil, fmt.Errorf("storage credentials secret %s: %w", key, err)
+	if err := c.Get(ctx, key, &sec); err != nil {
+		return "", "", fmt.Errorf("storage credentials secret %s: %w", key, err)
 	}
-	id, secret := string(sec.Data[SecretAccessKeyID]), string(sec.Data[SecretSecretAccessKey])
+	id, secret = string(sec.Data[SecretAccessKeyID]), string(sec.Data[SecretSecretAccessKey])
 	if id == "" || secret == "" {
-		return nil, fmt.Errorf("storage credentials secret %s must contain %s and %s", key, SecretAccessKeyID, SecretSecretAccessKey)
+		return "", "", fmt.Errorf("storage credentials secret %s must contain %s and %s", key, SecretAccessKeyID, SecretSecretAccessKey)
+	}
+	return id, secret, nil
+}
+
+// Open implements Factory.
+func (f SecretFactory) Open(ctx context.Context, namespace string, spec keeperv1.StorageSpec) (ObjectStore, error) {
+	id, secret, err := readCredentials(ctx, f.Client, namespace, spec)
+	if err != nil {
+		return nil, err
 	}
 	return NewS3(S3Config{
 		Endpoint:        spec.Endpoint,
@@ -52,6 +60,10 @@ func (f SecretFactory) Open(ctx context.Context, namespace string, spec keeperv1
 // MemoryFactory hands out one Memory store per endpoint+bucket. It is used by
 // tests and the offline demo.
 type MemoryFactory struct {
+	// Secrets, when set, makes Open validate the credentials Secret exactly
+	// like SecretFactory does, so missing Secrets fail the same way.
+	Secrets client.Reader
+
 	mu     sync.Mutex
 	stores map[string]*Memory
 }
@@ -60,7 +72,12 @@ type MemoryFactory struct {
 func NewMemoryFactory() *MemoryFactory { return &MemoryFactory{stores: map[string]*Memory{}} }
 
 // Open implements Factory.
-func (f *MemoryFactory) Open(_ context.Context, _ string, spec keeperv1.StorageSpec) (ObjectStore, error) {
+func (f *MemoryFactory) Open(ctx context.Context, namespace string, spec keeperv1.StorageSpec) (ObjectStore, error) {
+	if f.Secrets != nil {
+		if _, _, err := readCredentials(ctx, f.Secrets, namespace, spec); err != nil {
+			return nil, err
+		}
+	}
 	return f.Store(spec.Endpoint, spec.Bucket), nil
 }
 

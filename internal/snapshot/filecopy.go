@@ -186,14 +186,23 @@ func (d *FileCopy) Observe(ctx context.Context, b *keeperv1.Backup, store storag
 	p := Progress{Cut: true, Done: true}
 	for _, v := range b.Status.Volumes {
 		v.JobName = BackupJobName(b.Name, v.PVCName)
+		if v.Ready {
+			// Recorded as durable by an earlier Observe; the Job may since
+			// have been garbage collected (TTL), which is fine.
+			p.Volumes = append(p.Volumes, v)
+			continue
+		}
 		var job batchv1.Job
-		if err := d.Client.Get(ctx, types.NamespacedName{Namespace: b.Namespace, Name: v.JobName}, &job); err != nil {
-			if apierrors.IsNotFound(err) {
-				return Progress{Failed: true, Message: fmt.Sprintf("mover job %s disappeared", v.JobName)}, nil
-			}
+		err := d.Client.Get(ctx, types.NamespacedName{Namespace: b.Namespace, Name: v.JobName}, &job)
+		if err != nil && !apierrors.IsNotFound(err) {
 			return Progress{}, err
 		}
-		done, failed, msg := jobState(&job)
+		// NotFound right after Start is the informer cache lagging behind
+		// the create; Start re-creates a Job that is really gone.
+		done, failed, msg := false, false, ""
+		if err == nil {
+			done, failed, msg = jobState(&job)
+		}
 		switch {
 		case failed:
 			return Progress{Failed: true, Message: msg}, nil

@@ -12,6 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -53,10 +54,12 @@ func (r *BackupPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	orig := p.DeepCopy()
 	res, stepErr := r.reconcilePolicy(ctx, &p)
 	p.Status.ObservedGeneration = p.Generation
-	if !equality.Semantic.DeepEqual(orig.Status, p.Status) {
-		if err := r.Status().Patch(ctx, &p, client.MergeFrom(orig)); err != nil {
-			return ctrl.Result{}, errors.Join(stepErr, err)
-		}
+	conflict, err := r.patchStatus(ctx, &p, orig, !equality.Semantic.DeepEqual(orig.Status, p.Status))
+	if err != nil {
+		return ctrl.Result{}, errors.Join(stepErr, err)
+	}
+	if conflict {
+		return ctrl.Result{RequeueAfter: r.poll()}, nil
 	}
 	return res, stepErr
 }
@@ -140,7 +143,7 @@ func (r *BackupPolicyReconciler) applyRetention(ctx context.Context, p *keeperv1
 
 	sort.Slice(failed, func(i, j int) bool { return failed[i].CreationTimestamp.After(failed[j].CreationTimestamp.Time) })
 	nFailedPruned := 0
-	for i := int(p.Spec.FailedBackupsHistoryLimit); i < len(failed); i++ {
+	for i := int(ptr.Deref(p.Spec.FailedBackupsHistoryLimit, 3)); i < len(failed); i++ {
 		if err := r.deleteBackup(ctx, &failed[i]); err != nil {
 			return err
 		}

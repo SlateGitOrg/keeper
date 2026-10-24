@@ -136,6 +136,7 @@ type FileCopyDriverSpec struct {
 //
 // +kubebuilder:validation:XValidation:rule="isURL(self.endpoint) && url(self.endpoint).getScheme() in ['http', 'https']",message="endpoint must be an http(s) URL"
 // +kubebuilder:validation:XValidation:rule="!has(self.prefix) || (!self.prefix.startsWith('/') && !self.prefix.contains('..'))",message="prefix must be relative and must not contain '..'"
+// +kubebuilder:validation:XValidation:rule="has(self.credentialsSecretRef.name) && size(self.credentialsSecretRef.name) > 0",message="credentialsSecretRef.name is required"
 type StorageSpec struct {
 	// Endpoint is the S3 API URL, e.g. https://minio.backup.svc:9000.
 	// +kubebuilder:validation:MinLength=1

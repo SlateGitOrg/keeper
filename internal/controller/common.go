@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,9 +30,12 @@ func SetupIndexes(ctx context.Context, mgr manager.Manager) error {
 	})
 }
 
-// Shared configuration of all reconcilers.
+// Base is the configuration shared by all reconcilers.
 type Base struct {
 	client.Client
+	// APIReader reads straight from the API server, bypassing the cache. It
+	// guards side effects (hooks) against stale cached objects.
+	APIReader client.Reader
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
 	Clock    clock.PassiveClock
@@ -71,6 +75,20 @@ func (b *Base) normal(obj runtime.Object, reason, note string, args ...any) {
 
 func (b *Base) warning(obj runtime.Object, reason, note string, args ...any) {
 	b.event(obj, corev1.EventTypeWarning, reason, reason, note, args...)
+}
+
+// patchStatus writes obj's status if it changed, with optimistic locking so
+// a reconcile working from a stale cached object can never move status
+// backwards. A conflict just means a newer version exists: requeue.
+func (b *Base) patchStatus(ctx context.Context, obj, orig client.Object, changed bool) (bool, error) {
+	if !changed {
+		return false, nil
+	}
+	err := b.Status().Patch(ctx, obj, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
+	if apierrors.IsConflict(err) {
+		return true, nil
+	}
+	return false, err
 }
 
 func setCondition(conds *[]metav1.Condition, gen int64, typ string, ok bool, reason, msg string) {

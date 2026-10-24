@@ -111,7 +111,7 @@ type BackupPolicySpec struct {
 	// +kubebuilder:default=3
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=100
-	FailedBackupsHistoryLimit int32 `json:"failedBackupsHistoryLimit"`
+	FailedBackupsHistoryLimit *int32 `json:"failedBackupsHistoryLimit,omitempty"`
 
 	// Template is copied into each created Backup.
 	Template BackupTemplate `json:"template"`
