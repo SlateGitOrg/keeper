@@ -28,7 +28,7 @@ func TestSamplesAreValid(t *testing.T) {
 		if filepath.Base(f) == "kustomization.yaml" {
 			continue
 		}
-		raw, err := os.ReadFile(f) //nolint:gosec // repository file
+		raw, err := os.ReadFile(f)
 		must(t, err)
 		r := utilyaml.NewYAMLReader(bufioReader(raw))
 		for {
