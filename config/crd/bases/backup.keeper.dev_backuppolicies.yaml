@@ -1,0 +1,760 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.23.0
+  name: backuppolicies.backup.keeper.dev
+spec:
+  group: backup.keeper.dev
+  names:
+    categories:
+    - keeper
+    kind: BackupPolicy
+    listKind: BackupPolicyList
+    plural: backuppolicies
+    shortNames:
+    - bp
+    singular: backuppolicy
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.schedule
+      name: Schedule
+      type: string
+    - jsonPath: .spec.suspend
+      name: Suspend
+      type: boolean
+    - jsonPath: .status.lastScheduleTime
+      name: Last
+      type: date
+    - jsonPath: .status.retention.kept
+      name: Kept
+      type: integer
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: BackupPolicy schedules Backups and prunes them with a GFS retention
+          policy.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: BackupPolicySpec defines a schedule and retention for Backups.
+            properties:
+              concurrencyPolicy:
+                default: Forbid
+                description: ConcurrencyPolicy controls overlapping Backups.
+                enum:
+                - Forbid
+                - Allow
+                type: string
+              failedBackupsHistoryLimit:
+                default: 3
+                description: FailedBackupsHistoryLimit keeps this many failed Backups.
+                format: int32
+                maximum: 100
+                minimum: 0
+                type: integer
+              retention:
+                description: Retention prunes completed Backups.
+                properties:
+                  keepDaily:
+                    default: 0
+                    description: KeepDaily keeps the newest Backup of each of the
+                      last N days.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                  keepHourly:
+                    default: 0
+                    description: KeepHourly keeps the newest Backup of each of the
+                      last N hours.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                  keepLast:
+                    default: 0
+                    description: KeepLast keeps the N most recent Backups.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                  keepMonthly:
+                    default: 0
+                    description: KeepMonthly keeps the newest Backup of each of the
+                      last N months.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                  keepWeekly:
+                    default: 0
+                    description: KeepWeekly keeps the newest Backup of each of the
+                      last N ISO weeks.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                  keepYearly:
+                    default: 0
+                    description: KeepYearly keeps the newest Backup of each of the
+                      last N years.
+                    format: int32
+                    maximum: 1000
+                    minimum: 0
+                    type: integer
+                type: object
+                x-kubernetes-validations:
+                - message: retention must keep at least one backup
+                  rule: self.keepLast + self.keepHourly + self.keepDaily + self.keepWeekly
+                    + self.keepMonthly + self.keepYearly > 0
+              schedule:
+                description: |-
+                  Schedule is a standard 5-field cron expression or a descriptor such as
+                  @daily or "@every 6h". It is evaluated in TimeZone.
+                maxLength: 128
+                minLength: 1
+                type: string
+                x-kubernetes-validations:
+                - message: set the time zone with spec.timeZone, not CRON_TZ/TZ in
+                    the schedule
+                  rule: '!self.contains(''TZ='')'
+                - message: schedule must have exactly 5 fields or be an @descriptor
+                  rule: self.startsWith('@') || self.trim().split(' ').filter(f, f
+                    != '').size() == 5
+              startingDeadlineSeconds:
+                description: |-
+                  StartingDeadlineSeconds skips a scheduled run that could not start within
+                  this many seconds of its slot. Unset means "never too late".
+                format: int64
+                type: integer
+              suspend:
+                description: Suspend stops new Backups from being scheduled; retention
+                  still runs.
+                type: boolean
+              template:
+                description: Template is copied into each created Backup.
+                properties:
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels are added to created Backups.
+                    type: object
+                  spec:
+                    description: Spec of created Backups.
+                    properties:
+                      deletionPolicy:
+                        default: Delete
+                        description: DeletionPolicy applies when the Backup object
+                          is deleted.
+                        enum:
+                        - Delete
+                        - Retain
+                        type: string
+                      driver:
+                        description: Driver cuts the point-in-time copy.
+                        properties:
+                          csi:
+                            description: CSI configures the CSISnapshot driver.
+                            properties:
+                              readyTimeoutSeconds:
+                                default: 600
+                                description: |-
+                                  ReadyTimeoutSeconds bounds how long the operator waits for snapshots to
+                                  be cut and become ready to use.
+                                format: int32
+                                maximum: 86400
+                                minimum: 10
+                                type: integer
+                              volumeSnapshotClassName:
+                                description: |-
+                                  VolumeSnapshotClassName is passed to every VolumeSnapshot. Empty selects
+                                  the cluster default class.
+                                maxLength: 253
+                                type: string
+                            type: object
+                          fileCopy:
+                            description: FileCopy configures the FileCopy driver.
+                            properties:
+                              activeDeadlineSeconds:
+                                default: 3600
+                                description: ActiveDeadlineSeconds bounds each mover
+                                  Job.
+                                format: int64
+                                maximum: 172800
+                                minimum: 30
+                                type: integer
+                              backoffLimit:
+                                default: 1
+                                description: BackoffLimit is the mover Job's retry
+                                  budget.
+                                format: int32
+                                maximum: 10
+                                minimum: 0
+                                type: integer
+                              resources:
+                                description: Resources for the mover container.
+                                properties:
+                                  claims:
+                                    description: |-
+                                      Claims lists the names of resources, defined in spec.resourceClaims,
+                                      that are used by this container.
+
+                                      This field depends on the
+                                      DynamicResourceAllocation feature gate.
+
+                                      This field is immutable. It can only be set for containers.
+                                    items:
+                                      description: ResourceClaim references one entry
+                                        in PodSpec.ResourceClaims.
+                                      properties:
+                                        name:
+                                          description: |-
+                                            Name must match the name of one entry in pod.spec.resourceClaims of
+                                            the Pod where this field is used. It makes that resource available
+                                            inside a container.
+                                          type: string
+                                        request:
+                                          description: |-
+                                            Request is the name chosen for a request in the referenced claim.
+                                            If empty, everything from the claim is made available, otherwise
+                                            only the result of this request.
+                                          type: string
+                                      required:
+                                      - name
+                                      type: object
+                                    type: array
+                                    x-kubernetes-list-map-keys:
+                                    - name
+                                    x-kubernetes-list-type: map
+                                  limits:
+                                    additionalProperties:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      x-kubernetes-int-or-string: true
+                                    description: |-
+                                      Limits describes the maximum amount of compute resources allowed.
+                                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                    type: object
+                                  requests:
+                                    additionalProperties:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      x-kubernetes-int-or-string: true
+                                    description: |-
+                                      Requests describes the minimum amount of compute resources required.
+                                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                    type: object
+                                type: object
+                            type: object
+                          type:
+                            description: Type selects the driver.
+                            enum:
+                            - CSISnapshot
+                            - FileCopy
+                            type: string
+                        required:
+                        - type
+                        type: object
+                        x-kubernetes-validations:
+                        - message: csi may only be set when type is CSISnapshot
+                          rule: self.type == 'CSISnapshot' || !has(self.csi)
+                        - message: fileCopy may only be set when type is FileCopy
+                          rule: self.type == 'FileCopy' || !has(self.fileCopy)
+                      hooks:
+                        description: Hooks make the copy application-consistent.
+                        properties:
+                          post:
+                            description: Post hooks run, in order, once the snapshot
+                              is cut.
+                            items:
+                              description: Hook runs a command inside every running
+                                pod matched by PodSelector.
+                              properties:
+                                command:
+                                  description: Command is executed directly (no shell
+                                    is implied).
+                                  items:
+                                    type: string
+                                  maxItems: 64
+                                  minItems: 1
+                                  type: array
+                                container:
+                                  description: Container to exec into. Empty selects
+                                    the pod's first container.
+                                  maxLength: 63
+                                  type: string
+                                name:
+                                  description: Name identifies the hook in status
+                                    and events.
+                                  maxLength: 63
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                  type: string
+                                onError:
+                                  default: Fail
+                                  description: OnError decides whether a failure fails
+                                    the Backup.
+                                  enum:
+                                  - Fail
+                                  - Continue
+                                  type: string
+                                podSelector:
+                                  description: PodSelector selects the pods, in the
+                                    object's namespace, to exec into.
+                                  properties:
+                                    matchExpressions:
+                                      description: matchExpressions is a list of label
+                                        selector requirements. The requirements are
+                                        ANDed.
+                                      items:
+                                        description: |-
+                                          A label selector requirement is a selector that contains values, a key, and an operator that
+                                          relates the key and values.
+                                        properties:
+                                          key:
+                                            description: key is the label key that
+                                              the selector applies to.
+                                            type: string
+                                          operator:
+                                            description: |-
+                                              operator represents a key's relationship to a set of values.
+                                              Valid operators are In, NotIn, Exists and DoesNotExist.
+                                            type: string
+                                          values:
+                                            description: |-
+                                              values is an array of string values. If the operator is In or NotIn,
+                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                              the values array must be empty. This array is replaced during a strategic
+                                              merge patch.
+                                            items:
+                                              type: string
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        required:
+                                        - key
+                                        - operator
+                                        type: object
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    matchLabels:
+                                      additionalProperties:
+                                        type: string
+                                      description: |-
+                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                      type: object
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                timeoutSeconds:
+                                  default: 30
+                                  description: TimeoutSeconds bounds a single execution.
+                                  format: int32
+                                  maximum: 3600
+                                  minimum: 1
+                                  type: integer
+                              required:
+                              - command
+                              - name
+                              - podSelector
+                              type: object
+                            maxItems: 8
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
+                          pre:
+                            description: Pre hooks run, in order, before the snapshot
+                              is cut.
+                            items:
+                              description: Hook runs a command inside every running
+                                pod matched by PodSelector.
+                              properties:
+                                command:
+                                  description: Command is executed directly (no shell
+                                    is implied).
+                                  items:
+                                    type: string
+                                  maxItems: 64
+                                  minItems: 1
+                                  type: array
+                                container:
+                                  description: Container to exec into. Empty selects
+                                    the pod's first container.
+                                  maxLength: 63
+                                  type: string
+                                name:
+                                  description: Name identifies the hook in status
+                                    and events.
+                                  maxLength: 63
+                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                  type: string
+                                onError:
+                                  default: Fail
+                                  description: OnError decides whether a failure fails
+                                    the Backup.
+                                  enum:
+                                  - Fail
+                                  - Continue
+                                  type: string
+                                podSelector:
+                                  description: PodSelector selects the pods, in the
+                                    object's namespace, to exec into.
+                                  properties:
+                                    matchExpressions:
+                                      description: matchExpressions is a list of label
+                                        selector requirements. The requirements are
+                                        ANDed.
+                                      items:
+                                        description: |-
+                                          A label selector requirement is a selector that contains values, a key, and an operator that
+                                          relates the key and values.
+                                        properties:
+                                          key:
+                                            description: key is the label key that
+                                              the selector applies to.
+                                            type: string
+                                          operator:
+                                            description: |-
+                                              operator represents a key's relationship to a set of values.
+                                              Valid operators are In, NotIn, Exists and DoesNotExist.
+                                            type: string
+                                          values:
+                                            description: |-
+                                              values is an array of string values. If the operator is In or NotIn,
+                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                              the values array must be empty. This array is replaced during a strategic
+                                              merge patch.
+                                            items:
+                                              type: string
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        required:
+                                        - key
+                                        - operator
+                                        type: object
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    matchLabels:
+                                      additionalProperties:
+                                        type: string
+                                      description: |-
+                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                      type: object
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                timeoutSeconds:
+                                  default: 30
+                                  description: TimeoutSeconds bounds a single execution.
+                                  format: int32
+                                  maximum: 3600
+                                  minimum: 1
+                                  type: integer
+                              required:
+                              - command
+                              - name
+                              - podSelector
+                              type: object
+                            maxItems: 8
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
+                        type: object
+                      source:
+                        description: Source selects the claims to capture.
+                        properties:
+                          pvcNames:
+                            description: PVCNames lists claims, in the object's namespace,
+                              to back up.
+                            items:
+                              maxLength: 253
+                              type: string
+                            maxItems: 32
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-type: set
+                          pvcSelector:
+                            description: PVCSelector selects claims, in the object's
+                              namespace, by label.
+                            properties:
+                              matchExpressions:
+                                description: matchExpressions is a list of label selector
+                                  requirements. The requirements are ANDed.
+                                items:
+                                  description: |-
+                                    A label selector requirement is a selector that contains values, a key, and an operator that
+                                    relates the key and values.
+                                  properties:
+                                    key:
+                                      description: key is the label key that the selector
+                                        applies to.
+                                      type: string
+                                    operator:
+                                      description: |-
+                                        operator represents a key's relationship to a set of values.
+                                        Valid operators are In, NotIn, Exists and DoesNotExist.
+                                      type: string
+                                    values:
+                                      description: |-
+                                        values is an array of string values. If the operator is In or NotIn,
+                                        the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                        the values array must be empty. This array is replaced during a strategic
+                                        merge patch.
+                                      items:
+                                        type: string
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                  required:
+                                  - key
+                                  - operator
+                                  type: object
+                                type: array
+                                x-kubernetes-list-type: atomic
+                              matchLabels:
+                                additionalProperties:
+                                  type: string
+                                description: |-
+                                  matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                  map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                  operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                type: object
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of pvcNames or pvcSelector must be
+                            set
+                          rule: has(self.pvcNames) != has(self.pvcSelector)
+                      storage:
+                        description: Storage receives the backup manifest (and, for
+                          FileCopy, the data).
+                        properties:
+                          bucket:
+                            description: Bucket must already exist.
+                            pattern: ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$
+                            type: string
+                          credentialsSecretRef:
+                            description: |-
+                              CredentialsSecretRef names a Secret in the object's namespace holding
+                              the keys accessKeyID and secretAccessKey.
+                            properties:
+                              name:
+                                default: ""
+                                description: |-
+                                  Name of the referent.
+                                  This field is effectively required, but due to backwards compatibility is
+                                  allowed to be empty. Instances of this type with an empty value here are
+                                  almost certainly wrong.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          endpoint:
+                            description: Endpoint is the S3 API URL, e.g. https://minio.backup.svc:9000.
+                            maxLength: 2048
+                            minLength: 1
+                            type: string
+                          prefix:
+                            description: Prefix is prepended to every object key.
+                            maxLength: 512
+                            type: string
+                          region:
+                            default: us-east-1
+                            description: Region is sent in request signatures.
+                            maxLength: 64
+                            type: string
+                        required:
+                        - bucket
+                        - credentialsSecretRef
+                        - endpoint
+                        type: object
+                        x-kubernetes-validations:
+                        - message: endpoint must be an http(s) URL
+                          rule: isURL(self.endpoint) && url(self.endpoint).getScheme()
+                            in ['http', 'https']
+                        - message: prefix must be relative and must not contain '..'
+                          rule: '!has(self.prefix) || (!self.prefix.startsWith(''/'')
+                            && !self.prefix.contains(''..''))'
+                    required:
+                    - driver
+                    - source
+                    - storage
+                    type: object
+                required:
+                - spec
+                type: object
+              timeZone:
+                default: UTC
+                description: TimeZone is an IANA zone name used for the schedule and
+                  retention periods.
+                maxLength: 64
+                type: string
+            required:
+            - retention
+            - schedule
+            - template
+            type: object
+            x-kubernetes-validations:
+            - message: startingDeadlineSeconds must be at least 10
+              rule: '!has(self.startingDeadlineSeconds) || self.startingDeadlineSeconds
+                >= 10'
+          status:
+            description: BackupPolicyStatus is the observed state of a BackupPolicy.
+            properties:
+              active:
+                description: Active lists non-terminal Backups.
+                items:
+                  description: |-
+                    LocalObjectReference contains enough information to let you locate the
+                    referenced object inside the same namespace.
+                  properties:
+                    name:
+                      default: ""
+                      description: |-
+                        Name of the referent.
+                        This field is effectively required, but due to backwards compatibility is
+                        allowed to be empty. Instances of this type with an empty value here are
+                        almost certainly wrong.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+                x-kubernetes-list-type: atomic
+              conditions:
+                description: Conditions follow the Kubernetes condition conventions.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastScheduleTime:
+                description: |-
+                  LastScheduleTime is the most recent schedule slot that was handled
+                  (a Backup was created, or the slot was skipped).
+                format: date-time
+                type: string
+              lastSuccessfulTime:
+                description: LastSuccessfulTime is the snapshot time of the newest
+                  completed Backup.
+                format: date-time
+                type: string
+              nextScheduleTime:
+                description: NextScheduleTime is the next schedule slot.
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the generation last acted upon.
+                format: int64
+                type: integer
+              retention:
+                description: Retention summarises pruning.
+                properties:
+                  kept:
+                    description: Kept is the number of completed Backups retained.
+                    format: int32
+                    type: integer
+                  lastPruneTime:
+                    description: LastPruneTime is when a Backup was last pruned.
+                    format: date-time
+                    type: string
+                  prunedTotal:
+                    description: PrunedTotal counts Backups this policy has pruned.
+                    format: int64
+                    type: integer
+                required:
+                - kept
+                - prunedTotal
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: BackupPolicy names are limited to 50 characters so Backup names
+            fit
+          rule: size(self.metadata.name) <= 50
+    served: true
+    storage: true
+    subresources:
+      status: {}
