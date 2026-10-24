@@ -95,12 +95,25 @@ func (d *FileCopy) colocate(ctx context.Context, namespace, pvc string) (*corev1
 	return nil, nil
 }
 
+// createJob creates job owned by owner. An existing Job of the same name is
+// accepted only if owner already controls it.
 func (d *FileCopy) createJob(ctx context.Context, owner client.Object, job *batchv1.Job) error {
 	if err := controllerutil.SetControllerReference(owner, job, d.Scheme); err != nil {
 		return fmt.Errorf("own job %s: %w", job.Name, err)
 	}
-	if err := d.Client.Create(ctx, job); err != nil && !apierrors.IsAlreadyExists(err) {
+	err := d.Client.Create(ctx, job)
+	if err == nil {
+		return nil
+	}
+	if !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("create job %s: %w", job.Name, err)
+	}
+	var existing batchv1.Job
+	if err := d.Client.Get(ctx, client.ObjectKeyFromObject(job), &existing); err != nil {
+		return fmt.Errorf("get job %s: %w", job.Name, err)
+	}
+	if ref := metav1.GetControllerOf(&existing); ref == nil || ref.UID != owner.GetUID() {
+		return fmt.Errorf("job %s already exists and is not controlled by %s", job.Name, owner.GetName())
 	}
 	return nil
 }

@@ -1,0 +1,61 @@
+# Threat model
+
+keeper copies data out of application volumes and runs commands inside
+application pods. This document lists what it trusts, what it defends
+against, and what it doesn't.
+
+## Assets
+
+- Volume data, both in transit (mover → S3) and at rest (bucket, VolumeSnapshots).
+- S3 credentials, held in a Secret in each workload namespace.
+- The workload itself: hooks freeze and thaw it, and a frozen filesystem is an outage.
+
+## Trust boundaries
+
+| Actor | Trusted for | Not trusted for |
+|---|---|---|
+| Cluster admin (installs the operator) | everything | – |
+| Namespace user with create on Backup/BackupPolicy | choosing what to back up in *their* namespace | anything outside it (see Risk 1) |
+| Object storage | availability | integrity of archives (verified by SHA-256 on restore) |
+| Archive contents | – | paths, link targets, modes (validated on extract) |
+
+## Mitigations in place
+
+- **Archive integrity.** The SHA-256 of each archive is recorded in Backup
+  status and the backup manifest. Restore checks the hash before anything
+  becomes visible in the target, and a mismatch leaves the target empty
+  (tested).
+- **Hostile archives.** Absolute paths, `..`, backslashes, NUL bytes, writes
+  through planted symlinks or under a file "parent" are rejected. setuid,
+  setgid and sticky bits are stripped. Hard links and device nodes are
+  skipped. Files are opened with `O_EXCL|O_NOFOLLOW`. Two fuzzers back this up.
+- **No overwrite.** Restores create new claims only, and a pre-existing claim
+  fails the Restore.
+- **Least-privilege movers.** Mover pods run without a service account token,
+  with a read-only root filesystem, no privilege escalation and RuntimeDefault
+  seccomp. They drop every capability except DAC_OVERRIDE (backup, read-only
+  mount) or CHOWN/DAC_OVERRIDE/FOWNER (restore).
+- **Credentials.** S3 keys reach movers only through `secretKeyRef`. They never
+  appear in Job specs, status, events or logs.
+- **Hook blast radius.** An empty pod selector matches no pods. Hooks run only
+  in the Backup's own namespace. Output kept in status is truncated to 512 bytes.
+- **Never stuck frozen.** Post hooks run after every failure path that follows
+  pre hooks, and when a Backup is deleted mid-snapshot.
+
+## Known risks (not mitigated)
+
+1. **Exec as a privilege.** The operator's ServiceAccount holds `pods/exec`
+   cluster-wide. Anyone who can create a Backup or BackupPolicy in a namespace
+   can make the operator run an arbitrary command in any pod of that
+   namespace. Grant those create rights only to people who could already exec
+   into those pods. A future admission policy could restrict hook commands.
+2. **Data in transit.** TLS to the bucket depends on the `https://` endpoint.
+   An `http://` endpoint sends data in clear text. Custom CA bundles are not
+   supported yet.
+3. **No client-side encryption.** Archives are stored as gzip and are not
+   encrypted. Rely on bucket-side encryption (SSE) for data at rest.
+4. **Bucket write access is total.** The credentials can delete any object
+   under the prefix. Object lock and immutability are not used.
+5. **Pod Security.** Mover pods run as root with the capabilities above and are
+   rejected in namespaces that enforce the `restricted` profile. Running them
+   under `baseline` is the supported setup.

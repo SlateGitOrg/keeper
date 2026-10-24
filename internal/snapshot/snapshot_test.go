@@ -202,3 +202,23 @@ func TestFileCopyObserveEdgeCases(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestFileCopyRefusesForeignJob(t *testing.T) {
+	ctx := context.Background()
+	s := testScheme(t)
+	b := backup(keeperv1.DriverFileCopy)
+	foreign := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: BackupJobName("pg", "data"), Namespace: "db"}}
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(foreign).Build()
+	d := &FileCopy{Deps: Deps{Client: c, Scheme: s}, Image: "keeper:1"}
+	if err := d.Start(ctx, b); err == nil || !strings.Contains(err.Error(), "not controlled by pg") {
+		t.Fatalf("adopting a foreign job: %v", err)
+	}
+	ours := backup(keeperv1.DriverFileCopy)
+	ours.Name, ours.UID = "mine", "uid-2"
+	if err := d.Start(ctx, ours); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Start(ctx, ours); err != nil {
+		t.Fatalf("second Start must accept its own Job: %v", err)
+	}
+}
