@@ -260,9 +260,9 @@ Apple M1 Pro (16 GB) shared with other build jobs, so treat them as rough.
 
 | What | Result | Command |
 |---|---|---|
-| Full gate | passes from a fresh clone in 49 s wall time (fmt, generated drift, vet, lint 0 issues, `-race` tests, coverage) | `make check` |
-| Tests | 74 tests (13 envtest) + 66 subtests passed, 0 failed, 1 skipped (a fuzz seed whose header `archive/tar` cannot encode) | `hack/test-count.sh` |
-| Core coverage | 89.1% of statements (controller 84.8, hooks 92.0, mover 88.1, operator 80.0, retention 100, schedule 100, snapshot 91.9, storage 93.9) | `make test cover-check` |
+| Full gate | passes from a fresh clone in 51 s wall time (repo hygiene, fmt, generated drift, vet, lint 0 issues, `-race` tests, coverage) | `make check` |
+| Tests | 79 tests (14 envtest) + 73 subtests passed, 0 failed, 1 skipped (a fuzz seed whose header `archive/tar` cannot encode) | `hack/test-count.sh` |
+| Core coverage | 89.3% of statements (controller 85.5, hooks 92.0, mover 87.9, operator 80.0, retention 100, schedule 100, snapshot 91.9, storage 93.9) | `make test cover-check` |
 | Retention properties | oracle equivalence, partition, bounds, idempotence, monotonicity, bounded churn: 100 random cases each (rapid default) over 6 time zones | `go test ./internal/retention` |
 | Fuzzing | `FuzzRestore`, `FuzzSafePath`; one crasher found during development (an untestable header in the harness, now a seed) | `make fuzz` |
 | Real S3 | conformance suite + 4-file/13 MiB mover round trip pass against MinIO RELEASE.2026-09-22 | `make integration` |
