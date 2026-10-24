@@ -42,7 +42,7 @@ func tree(t *testing.T, root string) map[string]string {
 		case !info.Mode().IsRegular():
 			out[rel] = "special"
 		default:
-			b, _ := os.ReadFile(p) //nolint:gosec // test fixture
+			b, _ := os.ReadFile(p)
 			out[rel] = "file:" + info.Mode().Perm().String() + ":" + string(b)
 		}
 		return nil
@@ -198,7 +198,7 @@ func TestRestoreRefusesToOverwrite(t *testing.T) {
 	if _, err := Restore(ctx, store, RestoreOptions{ArchiveKey: "a", Dest: dst}); err == nil {
 		t.Fatal("overwrote an existing file")
 	}
-	if b, _ := os.ReadFile(filepath.Join(dst, "empty")); string(b) != "precious" { //nolint:gosec // test path
+	if b, _ := os.ReadFile(filepath.Join(dst, "empty")); string(b) != "precious" {
 		t.Fatal("existing file modified")
 	}
 }

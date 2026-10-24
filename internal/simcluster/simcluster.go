@@ -395,12 +395,12 @@ func CopyTree(src, dst string) error {
 }
 
 func copyFile(src, dst string, perm fs.FileMode) error {
-	in, err := os.Open(src) //nolint:gosec // simulated volume path.
+	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, perm) //nolint:gosec // simulated volume path.
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, perm)
 	if err != nil {
 		return err
 	}

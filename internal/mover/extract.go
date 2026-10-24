@@ -204,7 +204,7 @@ func extract(ctx context.Context, r io.Reader, root string) (RestoreStats, error
 }
 
 func writeFile(target string, r io.Reader, perm os.FileMode, size int64) error {
-	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, perm) //nolint:gosec // target validated by SafePath and checkParents.
+	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, perm)
 	if err != nil {
 		return err
 	}

@@ -36,7 +36,7 @@ var version = "dev"
 
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "keeper:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "keeper:", err)
 		os.Exit(1)
 	}
 }
@@ -51,7 +51,7 @@ commands:
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, usage)
+		_, _ = fmt.Fprintln(stderr, usage)
 		return errors.New("missing command")
 	}
 	switch args[0] {
@@ -68,7 +68,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		_, err := fmt.Fprintln(stdout, usage)
 		return err
 	}
-	fmt.Fprintln(stderr, usage)
+	_, _ = fmt.Fprintln(stderr, usage)
 	return fmt.Errorf("unknown command %q", args[0])
 }
 

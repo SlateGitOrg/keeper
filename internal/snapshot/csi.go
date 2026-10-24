@@ -28,8 +28,8 @@ type CSI struct {
 // ComponentSnapshot labels VolumeSnapshots created by the operator.
 const ComponentSnapshot = "snapshot"
 
-// SnapshotName is the VolumeSnapshot name for a volume of a Backup.
-func SnapshotName(backup, pvc string) string { return ChildName(backup, pvc) }
+// VolumeSnapshotName is the VolumeSnapshot name for a volume of a Backup.
+func VolumeSnapshotName(backup, pvc string) string { return ChildName(backup, pvc) }
 
 func csiTimeout(b *keeperv1.Backup) time.Duration {
 	if c := b.Spec.Driver.CSI; c != nil && c.ReadyTimeoutSeconds > 0 {
@@ -43,7 +43,7 @@ func (d *CSI) Start(ctx context.Context, b *keeperv1.Backup) error {
 	for _, v := range b.Status.Volumes {
 		vs := &snapv1.VolumeSnapshot{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      SnapshotName(b.Name, v.PVCName),
+				Name:      VolumeSnapshotName(b.Name, v.PVCName),
 				Namespace: b.Namespace,
 				Labels:    map[string]string{keeperv1.LabelBackup: b.Name, keeperv1.LabelComponent: ComponentSnapshot},
 			},
@@ -79,7 +79,7 @@ func (d *CSI) verifyOwned(ctx context.Context, b *keeperv1.Backup, name string) 
 func (d *CSI) Observe(ctx context.Context, b *keeperv1.Backup, _ storage.ObjectStore) (Progress, error) {
 	p := Progress{Cut: true, Done: true}
 	for _, v := range b.Status.Volumes {
-		name := SnapshotName(b.Name, v.PVCName)
+		name := VolumeSnapshotName(b.Name, v.PVCName)
 		v.SnapshotName = name
 		var vs snapv1.VolumeSnapshot
 		err := d.Client.Get(ctx, types.NamespacedName{Namespace: b.Namespace, Name: name}, &vs)
@@ -136,7 +136,7 @@ func (d *CSI) StartRestore(ctx context.Context, r *keeperv1.Restore, b *keeperv1
 		pvc.Spec.DataSource = &corev1.TypedLocalObjectReference{
 			APIGroup: &snapv1.SchemeGroupVersion.Group,
 			Kind:     "VolumeSnapshot",
-			Name:     SnapshotName(b.Name, rv.Source.PVCName),
+			Name:     VolumeSnapshotName(b.Name, rv.Source.PVCName),
 		}
 		if err := createClaim(ctx, d.Client, r, pvc); err != nil {
 			return err

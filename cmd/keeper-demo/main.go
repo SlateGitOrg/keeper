@@ -66,13 +66,13 @@ func main() {
 	crds := flag.String("crds", "config", "directory holding crd/bases and test-crds")
 	flag.Parse()
 	if err := run(*days, *crds, os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "demo:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "demo:", err)
 		os.Exit(1)
 	}
 }
 
 func section(w io.Writer, title string) {
-	fmt.Fprintf(w, "\n== %s %s\n", title, strings.Repeat("=", max(0, 70-len(title))))
+	_, _ = fmt.Fprintf(w, "\n== %s %s\n", title, strings.Repeat("=", max(0, 70-len(title))))
 }
 
 func run(days int, crdDir string, out io.Writer) error {
@@ -135,7 +135,7 @@ func run(days int, crdDir string, out io.Writer) error {
 	if v, err := envVersion(cfg); err == nil {
 		ver = v
 	}
-	fmt.Fprintf(out, "kube-apiserver %s up; CRDs: backuppolicies, backups, restores (+ VolumeSnapshot CRDs)\n", ver)
+	_, _ = fmt.Fprintf(out, "kube-apiserver %s up; CRDs: backuppolicies, backups, restores (+ VolumeSnapshot CRDs)\n", ver)
 
 	steps := []func(context.Context) error{
 		d.validation,
@@ -180,7 +180,7 @@ func (d *demo) validation(ctx context.Context) error {
 		if i := strings.LastIndex(msg, ": "); i > 0 {
 			msg = msg[i+2:]
 		}
-		fmt.Fprintf(d.out, "  %-34s -> rejected: %s\n", n, strings.TrimSuffix(msg, "]"))
+		_, _ = fmt.Fprintf(d.out, "  %-34s -> rejected: %s\n", n, strings.TrimSuffix(msg, "]"))
 	}
 	return nil
 }
@@ -228,9 +228,9 @@ func treeHash(root string) (string, error) {
 		if strings.HasPrefix(rel, ".keeper") {
 			return nil
 		}
-		fmt.Fprintf(h, "%s|%v|", rel, de.Type())
+		_, _ = fmt.Fprintf(h, "%s|%v|", rel, de.Type())
 		if de.Type().IsRegular() {
-			b, err := os.ReadFile(p) //nolint:gosec // demo volume
+			b, err := os.ReadFile(p)
 			if err != nil {
 				return err
 			}
@@ -243,12 +243,12 @@ func treeHash(root string) (string, error) {
 
 // writeRows simulates database writes between backups.
 func writeRows(dir string, slot int) error {
-	f, err := os.OpenFile(filepath.Join(dir, "pgdata", "base", fmt.Sprintf("orders.%d", slot%4)), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // demo volume
+	f, err := os.OpenFile(filepath.Join(dir, "pgdata", "base", fmt.Sprintf("orders.%d", slot%4)), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
 	for i := range 40 {
-		fmt.Fprintf(f, "order-%06d-%02d,sku-%03d,qty=%d\n", slot, i, (slot*7+i)%997, i%5+1)
+		_, _ = fmt.Fprintf(f, "order-%06d-%02d,sku-%03d,qty=%d\n", slot, i, (slot*7+i)%997, i%5+1)
 	}
 	return f.Close()
 }
@@ -324,7 +324,7 @@ func (d *demo) schedule(ctx context.Context, days int) error {
 	if err := d.c.Create(ctx, p); err != nil {
 		return err
 	}
-	fmt.Fprintf(d.out, "policy %s/%s: schedule %q tz=%s, keepLast=4 keepDaily=7 keepWeekly=4 keepMonthly=3, driver FileCopy\n",
+	_, _ = fmt.Fprintf(d.out, "policy %s/%s: schedule %q tz=%s, keepLast=4 keepDaily=7 keepWeekly=4 keepMonthly=3, driver FileCopy\n",
 		ns, p.Name, p.Spec.Schedule, p.Spec.TimeZone)
 
 	section(d.out, fmt.Sprintf("4. Fast-forward %d days of schedule slots (fake clock)", days))
@@ -358,9 +358,9 @@ func (d *demo) schedule(ctx context.Context, days int) error {
 		}
 		lastNext = slot.Add(6 * time.Hour)
 	}
-	fmt.Fprintf(d.out, "%d backups ran in %.1fs of wall time\n", slots, time.Since(began).Seconds())
+	_, _ = fmt.Fprintf(d.out, "%d backups ran in %.1fs of wall time\n", slots, time.Since(began).Seconds())
 	if calls := d.exec.CommandLines(); len(calls) >= 3 {
-		fmt.Fprintf(d.out, "hook executions per backup (first backup): %q, %q, %q\n", calls[0], calls[1], calls[2])
+		_, _ = fmt.Fprintf(d.out, "hook executions per backup (first backup): %q, %q, %q\n", calls[0], calls[1], calls[2])
 	}
 
 	section(d.out, "5. What retention kept (newest first)")
@@ -386,11 +386,11 @@ func (d *demo) schedule(ctx context.Context, days int) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 	tw := tabwriter.NewWriter(d.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "BACKUP\tSNAPSHOT (UTC)\tWEEKDAY\tARCHIVE\tRETAINED BY")
+	_, _ = fmt.Fprintln(tw, "BACKUP\tSNAPSHOT (UTC)\tWEEKDAY\tARCHIVE\tRETAINED BY")
 	match := len(bs) == len(want)
 	for _, b := range bs {
 		match = match && want[b.Name]
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", b.Name, b.Status.SnapshotTime.UTC().Format("2006-01-02 15:04"),
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", b.Name, b.Status.SnapshotTime.UTC().Format("2006-01-02 15:04"),
 			b.Status.SnapshotTime.UTC().Weekday().String()[:3], human(b.Status.SizeBytes), b.Annotations[keeperv1.AnnotationRetainedBy])
 	}
 	if err := tw.Flush(); err != nil {
@@ -400,9 +400,9 @@ func (d *demo) schedule(ctx context.Context, days int) error {
 	if err := d.c.Get(ctx, types.NamespacedName{Namespace: ns, Name: "pg"}, &pol); err != nil {
 		return err
 	}
-	fmt.Fprintf(d.out, "kept %d of %d (bound keepLast+keepDaily+keepWeekly+keepMonthly = 18); policy status: kept=%d prunedTotal=%d next=%s\n",
+	_, _ = fmt.Fprintf(d.out, "kept %d of %d (bound keepLast+keepDaily+keepWeekly+keepMonthly = 18); policy status: kept=%d prunedTotal=%d next=%s\n",
 		len(bs), slots, pol.Status.Retention.Kept, pol.Status.Retention.PrunedTotal, pol.Status.NextScheduleTime.UTC().Format(time.RFC3339))
-	fmt.Fprintf(d.out, "survivors identical to retention.Apply over the same snapshot times: %v\n", match)
+	_, _ = fmt.Fprintf(d.out, "survivors identical to retention.Apply over the same snapshot times: %v\n", match)
 	if !match {
 		return errors.New("retention mismatch")
 	}
@@ -410,7 +410,7 @@ func (d *demo) schedule(ctx context.Context, days int) error {
 		return fmt.Errorf("next schedule %v, want %v", pol.Status.NextScheduleTime, lastNext)
 	}
 	objs, _ := d.store.List(ctx, "prod/")
-	fmt.Fprintf(d.out, "object store: %d objects, %s (only retained backups remain)\n", len(objs), human(d.store.TotalBytes()))
+	_, _ = fmt.Fprintf(d.out, "object store: %d objects, %s (only retained backups remain)\n", len(objs), human(d.store.TotalBytes()))
 
 	section(d.out, "6. Restore the oldest retained backup and verify it bit-for-bit")
 	oldest := bs[len(bs)-1]
@@ -429,12 +429,12 @@ func (d *demo) schedule(ctx context.Context, days int) error {
 		return err
 	}
 	live, _ := treeHash(dir)
-	fmt.Fprintf(d.out, "restore %s from %s: phase=%s target=%s job=%s\n", r.Name, oldest.Name, r.Status.Phase, r.Status.Volumes[0].TargetPVC, r.Status.Volumes[0].JobName)
-	fmt.Fprintf(d.out, "fingerprint at backup time %s | restored %s | live volume now %s\n", fingerprints[oldest.Name], got, live)
+	_, _ = fmt.Fprintf(d.out, "restore %s from %s: phase=%s target=%s job=%s\n", r.Name, oldest.Name, r.Status.Phase, r.Status.Volumes[0].TargetPVC, r.Status.Volumes[0].JobName)
+	_, _ = fmt.Fprintf(d.out, "fingerprint at backup time %s | restored %s | live volume now %s\n", fingerprints[oldest.Name], got, live)
 	if got != fingerprints[oldest.Name] {
 		return errors.New("restored data does not match the backup")
 	}
-	fmt.Fprintln(d.out, "restored data matches the point-in-time copy: true")
+	_, _ = fmt.Fprintln(d.out, "restored data matches the point-in-time copy: true")
 	return nil
 }
 
@@ -444,7 +444,7 @@ func (d *demo) progress(ctx context.Context, n int, slot time.Time) error {
 		return err
 	}
 	objs, _ := d.store.List(ctx, "prod/")
-	fmt.Fprintf(d.out, "  day %3d (%s): %3d backups taken, %2d retained, %3d pruned, store %3d objects %s\n",
+	_, _ = fmt.Fprintf(d.out, "  day %3d (%s): %3d backups taken, %2d retained, %3d pruned, store %3d objects %s\n",
 		n/4, slot.Format("2006-01-02"), n, len(bs), n-len(bs), len(objs), human(d.store.TotalBytes()))
 	return nil
 }
@@ -468,13 +468,13 @@ func (d *demo) failure(ctx context.Context) error {
 		return err
 	}
 	ready := meta.FindStatusCondition(b.Status.Conditions, keeperv1.ConditionReady)
-	fmt.Fprintf(d.out, "phase=%s reason=%s\nmessage: %s\n", b.Status.Phase, ready.Reason, b.Status.Message)
+	_, _ = fmt.Fprintf(d.out, "phase=%s reason=%s\nmessage: %s\n", b.Status.Phase, ready.Reason, b.Status.Message)
 	for _, h := range b.Status.Hooks {
 		code := "-"
 		if h.ExitCode != nil {
 			code = fmt.Sprint(*h.ExitCode)
 		}
-		fmt.Fprintf(d.out, "  hook %-5s %-10s pod=%s exit=%s ok=%v\n", h.Stage, h.Hook, h.Pod, code, h.Succeeded)
+		_, _ = fmt.Fprintf(d.out, "  hook %-5s %-10s pod=%s exit=%s ok=%v\n", h.Stage, h.Hook, h.Pod, code, h.Succeeded)
 	}
 	return nil
 }
@@ -492,7 +492,7 @@ func (d *demo) csi(ctx context.Context) error {
 		return err
 	}
 	before, _ := treeHash(d.sim.VolumeDir(ns, "pg-data"))
-	fmt.Fprintf(d.out, "backup %s: phase=%s snapshot=%s restoreSize=%s manifest=%s\n", b.Name, b.Status.Phase,
+	_, _ = fmt.Fprintf(d.out, "backup %s: phase=%s snapshot=%s restoreSize=%s manifest=%s\n", b.Name, b.Status.Phase,
 		b.Status.Volumes[0].SnapshotName, human(b.Status.Volumes[0].SizeBytes), b.Status.ManifestKey)
 	if err := writeRows(d.sim.VolumeDir(ns, "pg-data"), 9999); err != nil {
 		return err
@@ -518,7 +518,7 @@ func (d *demo) csi(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(d.out, "restored claim %s dataSource=%s/%s; content matches snapshot: %v\n", pvc.Name, pvc.Spec.DataSource.Kind, pvc.Spec.DataSource.Name, got == before)
+	_, _ = fmt.Fprintf(d.out, "restored claim %s dataSource=%s/%s; content matches snapshot: %v\n", pvc.Name, pvc.Spec.DataSource.Kind, pvc.Spec.DataSource.Name, got == before)
 	if got != before {
 		return errors.New("CSI restore mismatch")
 	}
@@ -544,7 +544,7 @@ func (d *demo) deletion(ctx context.Context) error {
 		time.Sleep(10 * time.Millisecond)
 	}
 	after, _ := d.store.List(ctx, "prod/")
-	fmt.Fprintf(d.out, "deleted %s: store objects %d -> %d\n", victim.Name, len(before), len(after))
+	_, _ = fmt.Fprintf(d.out, "deleted %s: store objects %d -> %d\n", victim.Name, len(before), len(after))
 	return nil
 }
 
@@ -568,7 +568,7 @@ func (d *demo) summary(ctx context.Context) error {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(d.out, "  event %-32s x%d\n", k, counts[k])
+		_, _ = fmt.Fprintf(d.out, "  event %-32s x%d\n", k, counts[k])
 	}
 	families, err := ctrlmetrics.Registry.Gather()
 	if err != nil {
@@ -579,7 +579,7 @@ func (d *demo) summary(ctx context.Context) error {
 			continue
 		}
 		for _, m := range f.GetMetric() {
-			fmt.Fprintf(d.out, "  metric %s{%s} %g\n", f.GetName(), labels(m), value(m))
+			_, _ = fmt.Fprintf(d.out, "  metric %s{%s} %g\n", f.GetName(), labels(m), value(m))
 		}
 	}
 	return nil

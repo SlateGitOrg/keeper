@@ -120,7 +120,7 @@ func TestPolicySchedulesAndPrunesGFS(t *testing.T) {
 		})
 	}
 	st := getPolicy(t, ns, "hourly").Status
-	if st.Retention.Kept != int32(len(want)) || st.Retention.PrunedTotal != int64(30-len(want)) || st.Retention.LastPruneTime == nil { //nolint:gosec // small
+	if st.Retention.Kept != int32(len(want)) || st.Retention.PrunedTotal != int64(30-len(want)) || st.Retention.LastPruneTime == nil {
 		t.Errorf("retention status %+v, want kept=%d pruned=%d", st.Retention, len(want), 30-len(want))
 	}
 	if !st.LastScheduleTime.Equal(ptrTime(slots[len(slots)-1])) {

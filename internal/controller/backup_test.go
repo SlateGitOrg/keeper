@@ -150,7 +150,7 @@ func TestFileCopyRestoreIsPointInTime(t *testing.T) {
 		t.Fatalf("restore status %+v", r.Status.Volumes)
 	}
 	dir := sim.VolumeDir(ns, "restored-data")
-	got, err := os.ReadFile(filepath.Join(dir, "pgdata", "PG_VERSION")) //nolint:gosec // test path
+	got, err := os.ReadFile(filepath.Join(dir, "pgdata", "PG_VERSION"))
 	must(t, err)
 	if string(got) != "17\n" {
 		t.Fatalf("restored PG_VERSION %q, want the backed-up 17", got)
@@ -206,7 +206,7 @@ func TestCSIBackupAndRestore(t *testing.T) {
 	b := waitBackup(t, ns, "pg-csi", keeperv1.BackupCompleted)
 
 	var vs snapv1.VolumeSnapshot
-	must(t, k8s.Get(ctx, types.NamespacedName{Namespace: ns, Name: snapshot.SnapshotName("pg-csi", "data")}, &vs))
+	must(t, k8s.Get(ctx, types.NamespacedName{Namespace: ns, Name: snapshot.VolumeSnapshotName("pg-csi", "data")}, &vs))
 	if *vs.Spec.Source.PersistentVolumeClaimName != "data" || *vs.Spec.VolumeSnapshotClassName != "fast-snaps" || vs.Labels[keeperv1.LabelBackup] != "pg-csi" {
 		t.Fatalf("volume snapshot %+v", vs)
 	}
@@ -238,7 +238,7 @@ func TestCSIBackupAndRestore(t *testing.T) {
 		t.Fatalf("data source %+v", pvc.Spec.DataSource)
 	}
 	eventually(t, "restored claim to be provisioned from the snapshot", func() bool {
-		b, err := os.ReadFile(filepath.Join(sim.VolumeDir(ns, "restored-data"), "pgdata", "PG_VERSION")) //nolint:gosec // test path
+		b, err := os.ReadFile(filepath.Join(sim.VolumeDir(ns, "restored-data"), "pgdata", "PG_VERSION"))
 		return err == nil && string(b) == "17\n"
 	})
 

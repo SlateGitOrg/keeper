@@ -39,7 +39,7 @@ func previewRetention(p retention.Policy, tz string, in io.Reader, out io.Writer
 		return err
 	}
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "TIME\tVERDICT\tKEPT BY")
+	_, _ = fmt.Fprintln(tw, "TIME\tVERDICT\tKEPT BY")
 	kept := 0
 	for _, d := range decisions {
 		verdict := "prune"
@@ -47,7 +47,7 @@ func previewRetention(p retention.Policy, tz string, in io.Reader, out io.Writer
 			verdict = "keep"
 			kept++
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", d.Time.In(loc).Format(time.RFC3339), verdict, d.ReasonString())
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", d.Time.In(loc).Format(time.RFC3339), verdict, d.ReasonString())
 	}
 	if err := tw.Flush(); err != nil {
 		return err

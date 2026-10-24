@@ -200,7 +200,7 @@ func writeArchive(ctx context.Context, root string, w io.Writer) (archiveStats, 
 // copyFile copies exactly size bytes of p (the size recorded in the header).
 // Growth after the header was written is ignored; shrinkage is an error.
 func copyFile(p string, w io.Writer, size int64) error {
-	f, err := os.Open(p) //nolint:gosec // p comes from walking the volume being backed up.
+	f, err := os.Open(p)
 	if err != nil {
 		return err
 	}
