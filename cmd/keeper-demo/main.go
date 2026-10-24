@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	clocktesting "k8s.io/utils/clock/testing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -77,6 +78,7 @@ func section(w io.Writer, title string) {
 
 func run(days int, crdDir string, out io.Writer) error {
 	ctrl.SetLogger(logr.Discard())
+	klog.SetLogger(logr.Discard()) // client-go logs request cancellations at shutdown
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		return errors.New("KUBEBUILDER_ASSETS is not set; run `make demo`")
 	}
@@ -352,7 +354,7 @@ func (d *demo) schedule(ctx context.Context, days int) error {
 		fingerprints[name] = fp
 		items = append(items, retention.Item{ID: name, Time: b.Status.SnapshotTime.Time})
 		if (i+1)%(7*4) == 0 || i == slots-1 {
-			if err := d.progress(ctx, i+1, slot); err != nil {
+			if err := d.progress(ctx, i+1, slot, items); err != nil {
 				return err
 			}
 		}
@@ -438,10 +440,22 @@ func (d *demo) schedule(ctx context.Context, days int) error {
 	return nil
 }
 
-func (d *demo) progress(ctx context.Context, n int, slot time.Time) error {
-	bs, err := d.policyBackups(ctx, "pg")
+// progress waits for retention to settle on the expected survivor count for
+// the backups taken so far, then prints a one-line summary.
+func (d *demo) progress(ctx context.Context, n int, slot time.Time, items []retention.Item) error {
+	decisions, err := retention.Apply(retention.Policy{Last: 4, Daily: 7, Weekly: 4, Monthly: 3}, items, time.UTC)
 	if err != nil {
 		return err
+	}
+	kept, _ := retention.Split(decisions)
+	var bs []keeperv1.Backup
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if bs, err = d.policyBackups(ctx, "pg"); err != nil {
+			return err
+		}
+		if objs, _ := d.store.List(ctx, "prod/"); len(bs) == len(kept) && len(objs) == 3*len(kept) {
+			break
+		}
 	}
 	objs, _ := d.store.List(ctx, "prod/")
 	_, _ = fmt.Fprintf(d.out, "  day %3d (%s): %3d backups taken, %2d retained, %3d pruned, store %3d objects %s\n",
