@@ -1,6 +1,8 @@
 package controller_test
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -325,3 +327,9 @@ func createRestore(t *testing.T, ns, name, backup string, mut ...func(*keeperv1.
 	must(t, k8s.Create(context.Background(), r))
 	return r
 }
+
+func namespaceObj(name string) *corev1.Namespace {
+	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
+}
+
+func bufioReader(b []byte) *bufio.Reader { return bufio.NewReader(bytes.NewReader(b)) }

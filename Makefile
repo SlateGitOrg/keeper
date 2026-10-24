@@ -21,14 +21,14 @@ help: ## List targets
 .PHONY: generate
 generate: ## Regenerate deepcopy code, CRDs and RBAC from the API types and markers
 	$(GO) tool controller-gen object paths=./api/...
-	$(GO) tool controller-gen crd rbac:roleName=keeper-manager-role paths=./... \
+	$(GO) tool controller-gen crd rbac:roleName=manager-role paths=./... \
 		output:crd:artifacts:config=config/crd/bases output:rbac:artifacts:config=config/rbac
 
 .PHONY: verify-generated
 verify-generated: ## Fail if generated files are stale
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; \
 	cp api/v1alpha1/zz_generated.deepcopy.go $$tmp/deepcopy.go && \
-	$(GO) tool controller-gen crd rbac:roleName=keeper-manager-role paths=./... \
+	$(GO) tool controller-gen crd rbac:roleName=manager-role paths=./... \
 		output:crd:artifacts:config=$$tmp/crd output:rbac:artifacts:config=$$tmp/rbac && \
 	$(GO) tool controller-gen object paths=./api/... && \
 	diff -r $$tmp/crd config/crd/bases && \

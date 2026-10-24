@@ -1,0 +1,21 @@
+# A one-off Backup outside any schedule (e.g. before a migration). Not
+# managed by retention; pinned backups are never pruned either.
+apiVersion: backup.keeper.dev/v1alpha1
+kind: Backup
+metadata:
+  name: postgres-before-v2-migration
+  namespace: shop
+  labels:
+    backup.keeper.dev/pin: "true"
+spec:
+  source:
+    pvcNames: [data-postgres-0]
+  driver:
+    type: FileCopy
+  storage:
+    endpoint: https://minio.backup.svc.cluster.local:9000
+    bucket: cluster-backups
+    prefix: prod
+    credentialsSecretRef:
+      name: backup-s3
+  deletionPolicy: Retain

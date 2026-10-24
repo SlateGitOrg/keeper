@@ -111,7 +111,7 @@ func TestFileCopyBackupLifecycle(t *testing.T) {
 	if !pod.Volumes[0].PersistentVolumeClaim.ReadOnly || !ctr.VolumeMounts[0].ReadOnly {
 		t.Error("backup mover must mount the claim read-only")
 	}
-	if !*ctr.SecurityContext.ReadOnlyRootFilesystem || *ctr.SecurityContext.AllowPrivilegeEscalation || !slices.Equal(ctr.SecurityContext.Capabilities.Add, []corev1.Capability{"DAC_READ_SEARCH"}) {
+	if !*ctr.SecurityContext.ReadOnlyRootFilesystem || *ctr.SecurityContext.AllowPrivilegeEscalation || !slices.Equal(ctr.SecurityContext.Capabilities.Add, []corev1.Capability{"DAC_OVERRIDE"}) {
 		t.Errorf("security context %+v", ctr.SecurityContext)
 	}
 	if aff := pod.Affinity; aff == nil || aff.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0] != "sim-node-1" {

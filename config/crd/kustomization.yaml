@@ -1,0 +1,4 @@
+resources:
+  - bases/backup.keeper.dev_backuppolicies.yaml
+  - bases/backup.keeper.dev_backups.yaml
+  - bases/backup.keeper.dev_restores.yaml

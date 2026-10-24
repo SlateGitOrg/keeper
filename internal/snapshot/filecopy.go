@@ -117,8 +117,10 @@ func (d *FileCopy) moverJob(namespace, name, claim string, readOnly bool, args m
 		resources = cfg.Resources
 	}
 	// Backups only need to read every file; restores need to recreate
-	// ownership and permissions. Nothing else is granted.
-	caps := []corev1.Capability{"DAC_READ_SEARCH"}
+	// ownership and permissions. Nothing else is granted. DAC_OVERRIDE (not
+	// DAC_READ_SEARCH) is used for reads because it is on the Pod Security
+	// "baseline" allow-list; the read-only mount keeps it from writing.
+	caps := []corev1.Capability{"DAC_OVERRIDE"}
 	if !readOnly {
 		caps = []corev1.Capability{"CHOWN", "DAC_OVERRIDE", "FOWNER"}
 	}

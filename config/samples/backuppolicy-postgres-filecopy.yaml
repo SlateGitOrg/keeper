@@ -1,0 +1,60 @@
+# Application-consistent, 6-hourly file-level backups of a Postgres volume.
+# CHECKPOINT flushes dirty pages, fsfreeze blocks writes while the mover
+# streams the volume to object storage, and the post hook always thaws it.
+apiVersion: backup.keeper.dev/v1alpha1
+kind: BackupPolicy
+metadata:
+  name: postgres
+  namespace: shop
+spec:
+  schedule: "0 */6 * * *"
+  timeZone: Asia/Kolkata
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  retention:
+    keepLast: 4
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 12
+  failedBackupsHistoryLimit: 3
+  template:
+    labels:
+      app.kubernetes.io/part-of: shop
+    spec:
+      source:
+        pvcSelector:
+          matchLabels:
+            app: postgres
+      driver:
+        type: FileCopy
+        fileCopy:
+          activeDeadlineSeconds: 7200
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 512Mi}
+      storage:
+        endpoint: https://minio.backup.svc.cluster.local:9000
+        bucket: cluster-backups
+        prefix: prod
+        credentialsSecretRef:
+          name: backup-s3
+      hooks:
+        pre:
+          - name: checkpoint
+            podSelector:
+              matchLabels: {app: postgres}
+            container: postgres
+            command: ["psql", "-U", "postgres", "-c", "CHECKPOINT"]
+            timeoutSeconds: 60
+          - name: freeze
+            podSelector:
+              matchLabels: {app: postgres}
+            container: postgres
+            command: ["fsfreeze", "--freeze", "/var/lib/postgresql/data"]
+        post:
+          - name: thaw
+            podSelector:
+              matchLabels: {app: postgres}
+            container: postgres
+            command: ["fsfreeze", "--unfreeze", "/var/lib/postgresql/data"]
+      deletionPolicy: Delete

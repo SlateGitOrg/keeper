@@ -1,0 +1,6 @@
+resources:
+  - 00-storage-secret.yaml
+  - backuppolicy-postgres-filecopy.yaml
+  - backuppolicy-csi-snapshots.yaml
+  - backup-manual.yaml
+  - restore.yaml

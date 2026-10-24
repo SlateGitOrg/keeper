@@ -1,0 +1,11 @@
+# Restore a Backup into new claims named "restored-<source claim>". Existing
+# claims are never overwritten; point the workload at the new claims.
+apiVersion: backup.keeper.dev/v1alpha1
+kind: Restore
+metadata:
+  name: postgres-restore
+  namespace: shop
+spec:
+  backupName: postgres-before-v2-migration
+  pvcNamePrefix: restored-
+  volumes: [data-postgres-0]

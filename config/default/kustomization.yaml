@@ -1,0 +1,7 @@
+# kubectl apply -k config/default
+namespace: keeper-system
+namePrefix: keeper-
+resources:
+  - ../crd
+  - ../rbac
+  - ../manager
