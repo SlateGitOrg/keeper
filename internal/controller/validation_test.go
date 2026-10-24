@@ -102,14 +102,15 @@ func TestCRDValidation(t *testing.T) {
 	})
 
 	t.Run("backup and restore specs are immutable", func(t *testing.T) {
-		b := createBackup(t, ns, "immutable", backupSpec(keeperv1.DriverFileCopy, "", "missing"))
-		b.Spec.Source.PVCNames = []string{"other"}
-		if err := k8s.Update(ctx, b); err == nil || !strings.Contains(err.Error(), "spec is immutable") {
+		createBackup(t, ns, "immutable", backupSpec(keeperv1.DriverFileCopy, "", "missing"))
+		err := update(t, &keeperv1.Backup{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "immutable"}}, func(b *keeperv1.Backup) {
+			b.Spec.Source.PVCNames = []string{"other"}
+		})
+		if err == nil || !strings.Contains(err.Error(), "spec is immutable") {
 			t.Fatalf("backup update: %v", err)
 		}
 		r := createRestore(t, ns, "immutable", "immutable")
-		r.Spec.BackupName = "other"
-		if err := k8s.Update(ctx, r); err == nil || !strings.Contains(err.Error(), "spec is immutable") {
+		if err := update(t, r.DeepCopy(), func(r *keeperv1.Restore) { r.Spec.BackupName = "other" }); err == nil || !strings.Contains(err.Error(), "spec is immutable") {
 			t.Fatalf("restore update: %v", err)
 		}
 		if r.Spec.PVCNamePrefix != "restored-" {

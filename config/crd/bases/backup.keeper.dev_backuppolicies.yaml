@@ -745,9 +745,6 @@ spec:
                     description: PrunedTotal counts Backups this policy has pruned.
                     format: int64
                     type: integer
-                required:
-                - kept
-                - prunedTotal
                 type: object
             type: object
         required:

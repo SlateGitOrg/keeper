@@ -120,9 +120,11 @@ type BackupPolicySpec struct {
 // RetentionStatus summarises the last retention pass.
 type RetentionStatus struct {
 	// Kept is the number of completed Backups retained.
-	Kept int32 `json:"kept"`
+	// +optional
+	Kept int32 `json:"kept,omitempty"`
 	// PrunedTotal counts Backups this policy has pruned.
-	PrunedTotal int64 `json:"prunedTotal"`
+	// +optional
+	PrunedTotal int64 `json:"prunedTotal,omitempty"`
 	// LastPruneTime is when a Backup was last pruned.
 	// +optional
 	LastPruneTime *metav1.Time `json:"lastPruneTime,omitempty"`

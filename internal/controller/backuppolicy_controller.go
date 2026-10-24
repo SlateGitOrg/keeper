@@ -110,6 +110,14 @@ func backupTime(b *keeperv1.Backup) time.Time {
 	return b.CreationTimestamp.Time
 }
 
+// scheduledTime is the slot a Backup was created for.
+func scheduledTime(b *keeperv1.Backup) time.Time {
+	if t, err := time.Parse(time.RFC3339, b.Annotations[keeperv1.AnnotationScheduledTime]); err == nil {
+		return t
+	}
+	return b.CreationTimestamp.Time
+}
+
 func (r *BackupPolicyReconciler) applyRetention(ctx context.Context, p *keeperv1.BackupPolicy, loc *time.Location, completed, failed []keeperv1.Backup) error {
 	rt := p.Spec.Retention
 	pol := retention.Policy{
@@ -141,7 +149,15 @@ func (r *BackupPolicyReconciler) applyRetention(ctx context.Context, p *keeperv1
 		r.normal(p, "Pruned", "Deleted backup %s (snapshot %s) by retention", d.ID, d.Time.UTC().Format(time.RFC3339))
 	}
 
-	sort.Slice(failed, func(i, j int) bool { return failed[i].CreationTimestamp.After(failed[j].CreationTimestamp.Time) })
+	// Newest first by schedule slot; creationTimestamp has only second
+	// resolution, and names (which embed the slot) break remaining ties.
+	sort.Slice(failed, func(i, j int) bool {
+		ti, tj := scheduledTime(&failed[i]), scheduledTime(&failed[j])
+		if !ti.Equal(tj) {
+			return ti.After(tj)
+		}
+		return failed[i].Name > failed[j].Name
+	})
 	nFailedPruned := 0
 	for i := int(ptr.Deref(p.Spec.FailedBackupsHistoryLimit, 3)); i < len(failed); i++ {
 		if err := r.deleteBackup(ctx, &failed[i]); err != nil {

@@ -471,8 +471,9 @@ func TestDeletion(t *testing.T) {
 		})
 		t.Cleanup(func() { store().Inject(nil) })
 		b := getBackup(t, ns, "orphaned")
-		b.Annotations = map[string]string{keeperv1.AnnotationSkipStorageCleanup: "true"}
-		must(t, k8s.Update(ctx, b))
+		must(t, update(t, b, func(b *keeperv1.Backup) {
+			b.Annotations = map[string]string{keeperv1.AnnotationSkipStorageCleanup: "true"}
+		}))
 		must(t, k8s.Delete(ctx, b))
 		waitGone(t, b)
 	})

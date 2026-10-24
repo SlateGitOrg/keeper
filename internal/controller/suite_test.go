@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	clocktesting "k8s.io/utils/clock/testing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -293,6 +294,19 @@ func hasEvent(t *testing.T, ns, name, reason string) bool {
 		}
 	}
 	return false
+}
+
+// update re-reads obj, applies mutate and writes it, retrying on conflicts
+// with the controllers' own writes.
+func update[T client.Object](t *testing.T, obj T, mutate func(T)) error {
+	t.Helper()
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := k8s.Get(context.Background(), client.ObjectKeyFromObject(obj), obj); err != nil {
+			return err
+		}
+		mutate(obj)
+		return k8s.Update(context.Background(), obj)
+	})
 }
 
 func createBackup(t *testing.T, ns, name string, spec keeperv1.BackupSpec) *keeperv1.Backup {

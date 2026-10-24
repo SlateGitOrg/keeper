@@ -36,9 +36,9 @@ type Base struct {
 	// APIReader reads straight from the API server, bypassing the cache. It
 	// guards side effects (hooks) against stale cached objects.
 	APIReader client.Reader
-	Scheme   *runtime.Scheme
-	Recorder events.EventRecorder
-	Clock    clock.PassiveClock
+	Scheme    *runtime.Scheme
+	Recorder  events.EventRecorder
+	Clock     clock.PassiveClock
 	// PollInterval is the safety-net requeue while waiting on external
 	// progress (snapshots, Jobs) that watches normally report.
 	PollInterval time.Duration
