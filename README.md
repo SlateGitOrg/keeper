@@ -86,7 +86,7 @@ Requirements: Go 1.27, golangci-lint v2, and network access on the first run
 after that).
 
 ```sh
-make check   # gofmt, generated-code drift, go vet, golangci-lint, race tests incl. envtest, coverage ≥ 80%
+make check   # repo hygiene, gofmt, generated-code drift, go vet, golangci-lint, race tests incl. envtest, coverage ≥ 80%
 make demo    # offline end-to-end demo (real API server, simulated kubelet, in-memory bucket)
 make integration   # storage conformance + mover round trip against real MinIO (Docker; skips without it)
 ```

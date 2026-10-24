@@ -1,4 +1,7 @@
 /bin/
+# binaries from a bare `go build ./cmd/...` at the repo root
+/keeper
+/keeper-demo
 /dist/
 /cover.out
 /coverage/

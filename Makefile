@@ -62,13 +62,17 @@ test: ## Unit + envtest integration tests with coverage of internal/...
 cover-check: ## Enforce COVER_MIN% statement coverage on core packages
 	hack/coverage.sh cover.out $(COVER_MIN)
 
+.PHONY: hygiene
+hygiene: ## Fail on tracked executables, files over 1 MiB, or absolute home paths
+	hack/hygiene.sh
+
 .PHONY: check
-check: fmt-check verify-generated vet lint test cover-check ## The full gate
+check: hygiene fmt-check verify-generated vet lint test cover-check ## The full gate
 	@echo "make check: OK"
 
 .PHONY: demo
 demo: ## Offline end-to-end demo against envtest + simulated cluster
-	$(GO) build -o bin/keeper-demo ./cmd/keeper-demo
+	$(GO) build -trimpath -o bin/keeper-demo ./cmd/keeper-demo
 	KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS)" ./bin/keeper-demo --days 60
 
 .PHONY: fuzz
