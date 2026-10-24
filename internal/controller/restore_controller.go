@@ -35,7 +35,8 @@ type RestoreReconciler struct {
 // Reconcile implements reconcile.Reconciler.
 func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var rs keeperv1.Restore
-	if err := r.Get(ctx, req.NamespacedName, &rs); err != nil {
+	// Read-your-writes: the reconcile builds on its own last status write.
+	if err := r.APIReader.Get(ctx, req.NamespacedName, &rs); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if rs.Status.Phase.Terminal() || !rs.DeletionTimestamp.IsZero() {

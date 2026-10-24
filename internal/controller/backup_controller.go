@@ -51,6 +51,11 @@ type BackupManifest struct {
 // Pending → PreHooks → Snapshotting → PostHooks → Finalizing → Completed,
 // failing to Failed from any step. Each reconcile performs one step and
 // persists status, so the lifecycle survives operator restarts.
+//
+// The Backup itself is read from the API server rather than the informer
+// cache: steps have side effects (hooks exec into the workload), so a step
+// must never run from a copy that predates the status write of the previous
+// step. Status writes use optimistic locking for the same reason.
 type BackupReconciler struct {
 	Base
 	Stores  storage.Factory
@@ -76,7 +81,7 @@ type BackupReconciler struct {
 // Reconcile implements reconcile.Reconciler.
 func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var b keeperv1.Backup
-	if err := r.Get(ctx, req.NamespacedName, &b); err != nil {
+	if err := r.APIReader.Get(ctx, req.NamespacedName, &b); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !b.DeletionTimestamp.IsZero() {
@@ -87,16 +92,6 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 	if b.Status.Phase.Terminal() {
 		return ctrl.Result{}, nil
-	}
-	if b.Status.Phase == keeperv1.BackupPreHooks || b.Status.Phase == keeperv1.BackupPostHooks {
-		// Hooks have side effects in the workload; never run them from a
-		// cached copy that may predate our own last status write.
-		if err := r.APIReader.Get(ctx, req.NamespacedName, &b); err != nil {
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		if b.Status.Phase != keeperv1.BackupPreHooks && b.Status.Phase != keeperv1.BackupPostHooks {
-			return ctrl.Result{RequeueAfter: r.poll()}, nil
-		}
 	}
 
 	orig := b.DeepCopy()

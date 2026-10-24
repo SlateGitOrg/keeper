@@ -45,7 +45,8 @@ type BackupPolicyReconciler struct {
 // Reconcile implements reconcile.Reconciler.
 func (r *BackupPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var p keeperv1.BackupPolicy
-	if err := r.Get(ctx, req.NamespacedName, &p); err != nil {
+	// Read-your-writes: the reconcile builds on its own last status write.
+	if err := r.APIReader.Get(ctx, req.NamespacedName, &p); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !p.DeletionTimestamp.IsZero() {
