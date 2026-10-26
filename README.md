@@ -1,5 +1,7 @@
 # keeper
 
+[![CI](https://github.com/SlateGitOrg/keeper/actions/workflows/ci.yml/badge.svg)](https://github.com/SlateGitOrg/keeper/actions/workflows/ci.yml)
+
 A Kubernetes operator for **scheduled, application-consistent backups of
 PVC-backed workloads**. It is built in the kubebuilder style on
 controller-runtime v0.25 and Kubernetes 1.37 APIs.
@@ -12,16 +14,21 @@ VolumeSnapshot or a file-level mover Job, resumes the application, records
 everything in status, conditions and events, and prunes old backups. A
 `Restore` turns any completed Backup back into new PersistentVolumeClaims.
 
-> Status: this is a portfolio project. It has not been used in production. The
-> data path, the controllers and the API are exercised against a real
-> kube-apiserver (envtest), a simulated kubelet/snapshot controller, and a real
-> MinIO server. It has never run against a real cluster. See [Limitations](#limitations).
+> Status: not used in production. The data path, the controllers and the API
+> are exercised against a real kube-apiserver (envtest), a simulated
+> kubelet/snapshot controller, and a real MinIO server. It has not been run
+> against a real cluster. See [Limitations](#limitations).
 
-**Who it's for:** platform teams running stateful workloads (Postgres, Redis,
-anything on a PVC) who want declarative backups with real consistency hooks
-and a retention policy they can reason about. It's also a readable reference
-operator for finalizers, CEL validation, idempotent state machines and envtest
-testing.
+## Why
+
+Stateful workloads on PVCs (Postgres, Redis, anything that writes to disk) need
+backups that are consistent, scheduled and prunable, and a plain volume copy
+taken while the application is writing is usually not consistent. keeper makes
+the whole cycle declarative: quiesce the application with `exec` hooks, take a
+point-in-time copy, resume, record the result, and apply a retention policy you
+can reason about. It targets platform teams who want that without scripting
+CronJobs by hand. It is also a compact reference operator for finalizers, CEL
+validation, idempotent state machines and envtest testing.
 
 ## Features
 
@@ -79,7 +86,7 @@ cmd/keeper-demo/       offline end-to-end demo
 config/                CRDs, RBAC, manager, samples (kustomize)
 ```
 
-## Quickstart
+## Quick start
 
 Requirements: Go 1.27, golangci-lint v2, and network access on the first run
 (Go modules plus the envtest kube-apiserver/etcd binaries, which are cached
@@ -281,7 +288,6 @@ Apple M1 Pro (16 GB) shared with other build jobs, so treat them as rough.
 - **Hooks run inline in the reconciler and are at-least-once.** Long hooks occupy a worker, and hooks must be idempotent.
 - **Security trade-offs.** `pods/exec` is cluster-wide, so Backup create rights amount to exec rights in that namespace ([THREAT_MODEL](docs/THREAT_MODEL.md)). Mover pods need the `baseline` Pod Security level. There's no custom CA bundle for S3 endpoints.
 - **Retention uses rolling periods, not calendar windows.** "keepDaily: 7" means the newest backup of each of the 7 most recent days that have a backup, not every backup from the last 7 calendar days.
-- **The CI workflow has never run.** The repository has not been pushed. `.github/workflows/ci.yml` mirrors `make check`, `make demo`, `make integration` and the image build.
 
 ## Roadmap
 
@@ -294,5 +300,5 @@ Apple M1 Pro (16 GB) shared with other build jobs, so treat them as rough.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). The vendored VolumeSnapshot CRDs in
+MIT — see [LICENSE](LICENSE). The vendored VolumeSnapshot CRDs in
 `config/test-crds/` are Apache-2.0 ([DATA.md](DATA.md)).

@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/archit2501/keeper/internal/storage"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 // Mode selects the mover direction.

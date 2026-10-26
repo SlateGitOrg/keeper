@@ -22,11 +22,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
-	"github.com/archit2501/keeper/internal/hooks"
-	"github.com/archit2501/keeper/internal/metrics"
-	"github.com/archit2501/keeper/internal/snapshot"
-	"github.com/archit2501/keeper/internal/storage"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
+	"github.com/SlateGitOrg/keeper/internal/hooks"
+	"github.com/SlateGitOrg/keeper/internal/metrics"
+	"github.com/SlateGitOrg/keeper/internal/snapshot"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 // BackupManifestVersion is the schema version of BackupManifest.

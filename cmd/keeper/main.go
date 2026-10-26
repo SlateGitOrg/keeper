@@ -24,11 +24,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/archit2501/keeper/internal/hooks"
-	"github.com/archit2501/keeper/internal/mover"
-	"github.com/archit2501/keeper/internal/operator"
-	"github.com/archit2501/keeper/internal/retention"
-	"github.com/archit2501/keeper/internal/storage"
+	"github.com/SlateGitOrg/keeper/internal/hooks"
+	"github.com/SlateGitOrg/keeper/internal/mover"
+	"github.com/SlateGitOrg/keeper/internal/operator"
+	"github.com/SlateGitOrg/keeper/internal/retention"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -77,7 +77,7 @@ func runManager(args []string) error {
 	metricsAddr := fs.String("metrics-bind-address", ":8080", "address the metrics endpoint binds to (0 disables)")
 	probeAddr := fs.String("health-probe-bind-address", ":8081", "address the health probes bind to")
 	leaderElect := fs.Bool("leader-elect", true, "enable leader election so only one replica reconciles")
-	moverImage := fs.String("mover-image", envOr("KEEPER_MOVER_IMAGE", "ghcr.io/archit2501/keeper:"+version), "image used by mover Jobs")
+	moverImage := fs.String("mover-image", envOr("KEEPER_MOVER_IMAGE", "ghcr.io/SlateGitOrg/keeper:"+version), "image used by mover Jobs")
 	concurrency := fs.Int("max-concurrent-backups", 4, "Backups reconciled in parallel (hooks run inline)")
 	poll := fs.Duration("poll-interval", 5*time.Second, "safety-net requeue while waiting for snapshots and Jobs")
 	debug := fs.Bool("debug", false, "verbose logging")

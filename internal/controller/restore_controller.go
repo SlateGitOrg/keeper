@@ -16,9 +16,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
-	"github.com/archit2501/keeper/internal/metrics"
-	"github.com/archit2501/keeper/internal/snapshot"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
+	"github.com/SlateGitOrg/keeper/internal/metrics"
+	"github.com/SlateGitOrg/keeper/internal/snapshot"
 )
 
 // RestoreReconciler materialises a Completed Backup into new claims.

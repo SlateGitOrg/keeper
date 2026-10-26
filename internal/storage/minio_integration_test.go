@@ -11,9 +11,9 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"github.com/archit2501/keeper/internal/mover"
-	"github.com/archit2501/keeper/internal/storage"
-	"github.com/archit2501/keeper/internal/storage/storagetest"
+	"github.com/SlateGitOrg/keeper/internal/mover"
+	"github.com/SlateGitOrg/keeper/internal/storage"
+	"github.com/SlateGitOrg/keeper/internal/storage/storagetest"
 )
 
 // TestRealMinIO runs the conformance suite and a mover round trip against a

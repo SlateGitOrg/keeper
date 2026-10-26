@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/archit2501/keeper/internal/storage"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 // tree returns path -> description for every entry under root (excluding root).

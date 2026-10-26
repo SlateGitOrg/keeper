@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
 )
 
 func validPolicy(ns, name string) *keeperv1.BackupPolicy {

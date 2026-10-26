@@ -12,10 +12,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
-	"github.com/archit2501/keeper/internal/storage"
-	"github.com/archit2501/keeper/internal/storage/s3test"
-	"github.com/archit2501/keeper/internal/storage/storagetest"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
+	"github.com/SlateGitOrg/keeper/internal/storage"
+	"github.com/SlateGitOrg/keeper/internal/storage/s3test"
+	"github.com/SlateGitOrg/keeper/internal/storage/storagetest"
 )
 
 func TestMemoryConformance(t *testing.T) {

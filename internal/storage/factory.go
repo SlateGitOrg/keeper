@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
 )
 
 // Secret keys read from StorageSpec.CredentialsSecretRef.

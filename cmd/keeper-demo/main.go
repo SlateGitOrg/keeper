@@ -38,13 +38,13 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
-	"github.com/archit2501/keeper/internal/controller"
-	"github.com/archit2501/keeper/internal/hooks"
-	"github.com/archit2501/keeper/internal/operator"
-	"github.com/archit2501/keeper/internal/retention"
-	"github.com/archit2501/keeper/internal/simcluster"
-	"github.com/archit2501/keeper/internal/storage"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
+	"github.com/SlateGitOrg/keeper/internal/controller"
+	"github.com/SlateGitOrg/keeper/internal/hooks"
+	"github.com/SlateGitOrg/keeper/internal/operator"
+	"github.com/SlateGitOrg/keeper/internal/retention"
+	"github.com/SlateGitOrg/keeper/internal/simcluster"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 const (

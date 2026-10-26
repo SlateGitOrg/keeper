@@ -19,10 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
-	"github.com/archit2501/keeper/internal/metrics"
-	"github.com/archit2501/keeper/internal/retention"
-	"github.com/archit2501/keeper/internal/schedule"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
+	"github.com/SlateGitOrg/keeper/internal/metrics"
+	"github.com/SlateGitOrg/keeper/internal/retention"
+	"github.com/SlateGitOrg/keeper/internal/schedule"
 )
 
 // BackupNameTimeFormat renders a schedule slot into Backup names (UTC).

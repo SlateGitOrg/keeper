@@ -27,11 +27,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
-	"github.com/archit2501/keeper/internal/hooks"
-	"github.com/archit2501/keeper/internal/operator"
-	"github.com/archit2501/keeper/internal/simcluster"
-	"github.com/archit2501/keeper/internal/storage"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
+	"github.com/SlateGitOrg/keeper/internal/hooks"
+	"github.com/SlateGitOrg/keeper/internal/operator"
+	"github.com/SlateGitOrg/keeper/internal/simcluster"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 // The suite runs one API server (envtest), one manager with the real

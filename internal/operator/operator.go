@@ -15,11 +15,11 @@ import (
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
-	"github.com/archit2501/keeper/internal/controller"
-	"github.com/archit2501/keeper/internal/hooks"
-	"github.com/archit2501/keeper/internal/snapshot"
-	"github.com/archit2501/keeper/internal/storage"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
+	"github.com/SlateGitOrg/keeper/internal/controller"
+	"github.com/SlateGitOrg/keeper/internal/hooks"
+	"github.com/SlateGitOrg/keeper/internal/snapshot"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 // EventSource is the reporting controller name on emitted events.

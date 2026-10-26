@@ -51,4 +51,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/archit2501/keeper
+        - github.com/SlateGitOrg/keeper

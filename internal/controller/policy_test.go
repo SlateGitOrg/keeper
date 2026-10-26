@@ -16,9 +16,9 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
-	"github.com/archit2501/keeper/internal/controller"
-	"github.com/archit2501/keeper/internal/retention"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
+	"github.com/SlateGitOrg/keeper/internal/controller"
+	"github.com/SlateGitOrg/keeper/internal/retention"
 )
 
 // resetClock puts the fake clock at real "now" so new policies (whose

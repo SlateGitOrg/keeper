@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	keeperv1 "github.com/archit2501/keeper/api/v1alpha1"
+	keeperv1 "github.com/SlateGitOrg/keeper/api/v1alpha1"
 )
 
 func pod(name string, phase corev1.PodPhase, lbls map[string]string, containers ...string) *corev1.Pod {

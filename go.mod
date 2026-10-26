@@ -1,4 +1,4 @@
-module github.com/archit2501/keeper
+module github.com/SlateGitOrg/keeper
 
 go 1.27.1
 

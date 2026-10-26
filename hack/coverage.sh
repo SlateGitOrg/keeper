@@ -8,7 +8,7 @@
 set -euo pipefail
 profile=${1:?coverprofile}
 min=${2:?min percent}
-mod=github.com/archit2501/keeper/internal
+mod=github.com/SlateGitOrg/keeper/internal
 core="retention|schedule|storage|mover|hooks|snapshot|controller|operator"
 excluded="storage/s3test|storage/storagetest|simcluster"
 

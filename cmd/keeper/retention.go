@@ -8,7 +8,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/archit2501/keeper/internal/retention"
+	"github.com/SlateGitOrg/keeper/internal/retention"
 )
 
 // previewRetention reads RFC 3339 timestamps (one per line, blank lines and

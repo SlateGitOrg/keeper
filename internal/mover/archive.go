@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/archit2501/keeper/internal/storage"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 // ManifestVersion is the schema version of VolumeManifest.

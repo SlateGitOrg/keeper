@@ -10,7 +10,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/archit2501/keeper/internal/storage"
+	"github.com/SlateGitOrg/keeper/internal/storage"
 )
 
 // Run exercises store. prefix isolates the suite's keys so it can run against
