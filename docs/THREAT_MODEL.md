@@ -32,7 +32,7 @@ against, and what it doesn't.
   directory entry whose name already exists as a symlink or file is
   rejected; directory modes are set via an `O_NOFOLLOW` descriptor and
   timestamps with `AT_SYMLINK_NOFOLLOW`, so no chmod or chtimes reaches a
-  link target (fix round 1: before this, a symlink-then-dir pair could chmod
+  link target (a symlink-then-dir pair would otherwise chmod
   a directory outside the restore root). setuid,
   setgid and sticky bits are stripped. Hard links and device nodes are
   skipped. Files are opened with `O_EXCL|O_NOFOLLOW`. Two fuzzers back this up.
